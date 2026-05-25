@@ -433,18 +433,22 @@ function App() {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
 useEffect(() => {
-  const handleResize = () => {
-    setIsMobile(window.innerWidth <= 768);
+  const handlePopState = () => {
+    // 뒤로가기를 누르면 무조건 홈 화면으로 상태 변경
+    setCurrentView("home");
   };
 
-  window.addEventListener("resize", handleResize);
-
-  return () => window.removeEventListener("resize", handleResize);
+  window.addEventListener("popstate", handlePopState);
+  return () => window.removeEventListener("popstate", handlePopState);
 }, []);
   const [currentView, setCurrentView] = useState("home");
   const [markers, setMarkers] = useState([]);
   const [selectedType, setSelectedType] = useState("stairs");
-
+const navigateTo = (view) => {
+  setCurrentView(view);
+  // 브라우저 주소창 기록에 현재 상태를 추가 (뒤로가기 대비)
+  window.history.pushState({ view }, "", `/${view}`);
+};
   const [startPoint, setStartPoint] = useState("");
   const [endPoint, setEndPoint] = useState("");
   const [routeSteps, setRouteSteps] = useState([]);             
@@ -551,12 +555,18 @@ useEffect(() => {
   }, []);
 
   const renderHeader = () => (
-    <div style={{
-      height: "65px", background: "#ffffff", borderBottom: "1px solid #EAEAEA",
-      display: "flex", alignItems: "center", padding: "0 20px", justifyContent: "space-between",
-      boxShadow: "0 2px 8px rgba(0,0,0,0.04)", zIndex: 1001, position: "relative",
-      boxSizing: "border-box"
-    }}>
+   <div style={{
+  position: "fixed",      // 화면 최상단 고정
+  top: 0,
+  left: 0,
+  width: "100%",
+  height: "50px",         // 탭 높이만큼 공간 확보
+  background: "#fff",
+  zIndex: 2000,           // 가장 위로 표시
+  display: "flex",
+  justifyContent: "space-around",
+  borderBottom: "1px solid #ddd"
+}}>
       <div onClick={() => setCurrentView("home")} style={{ cursor: "pointer", display: "flex", alignItems: "center", height: "100%" }}>
         <div style={{ transform: "scale(0.48)", transformOrigin: "left center", margin: "-12px 0" }}>
           <SimpleTextLogo />
@@ -607,7 +617,7 @@ return (
   paddingLeft: "20px"           // [중요] 왼쪽으로 살짝 더 밀고 싶다면 추가
 }}>
               <div 
-                onClick={() => { setCurrentView("search"); resetRoute(); }} 
+                onClick={() => { navigateTo("search"); resetRoute(); }} 
                 style={{ width: isMobile ? "100%" : "260px",
 maxWidth: isMobile ? "340px" : "260px", background: "rgba(255, 255, 255, 0.92)", padding: "28px 20px", borderRadius: "28px", boxShadow: "0 10px 30px rgba(0,0,0,0.06)", border: "2px solid #EBF1F6", cursor: "pointer", transition: "all 0.25s ease-in-out", textAlign: "center", backdropFilter: "blur(4px)" }}
                 onMouseEnter={(e) => { e.currentTarget.style.transform="translateY(-6px)"; e.currentTarget.style.borderColor="#4BAB6E"; }}
@@ -618,7 +628,7 @@ maxWidth: isMobile ? "340px" : "260px", background: "rgba(255, 255, 255, 0.92)",
                 <p style={{ color: "#555", fontSize: "13.5px", margin: 0, lineHeight: "1.6", wordBreak: "keep-all" }}>바퀴가 구르기 편한 길과<br />위험 장애물을 미리 확인해요.</p>
               </div>
               <div 
-                onClick={() => setCurrentView("create")} 
+                onClick={() => navigateTo("create")} 
                 style={{ width: isMobile ? "100%" : "260px",
 maxWidth: isMobile ? "340px" : "260px", background: "rgba(255, 255, 255, 0.92)", padding: "28px 20px", borderRadius: "28px", boxShadow: "0 10px 30px rgba(0,0,0,0.06)", border: "2px solid #EBF1F6", cursor: "pointer", transition: "all 0.25s ease-in-out", textAlign: "center", backdropFilter: "blur(4px)" }}
                 onMouseEnter={(e) => { e.currentTarget.style.transform="translateY(-6px)"; e.currentTarget.style.borderColor="#4BAB6E"; }}
@@ -629,7 +639,7 @@ maxWidth: isMobile ? "340px" : "260px", background: "rgba(255, 255, 255, 0.92)",
                 <p style={{ color: "#555", fontSize: "13.5px", margin: 0, lineHeight: "1.6", wordBreak: "keep-all" }}>골목길의 계단, 턱, 보도 파손을<br />직접 지도에 등록하고 제보해요.</p>
               </div>
               <div 
-                onClick={() => setCurrentView("walk")} 
+                onClick={() => navigateTo("walk")} 
                 style={{width: isMobile ? "100%" : "260px",
 maxWidth: isMobile ? "340px" : "260px", background: "rgba(255, 255, 255, 0.92)", padding: "28px 20px", borderRadius: "28px", boxShadow: "0 10px 30px rgba(0,0,0,0.06)", border: "2px solid #EBF1F6", cursor: "pointer", transition: "all 0.25s ease-in-out", textAlign: "center", backdropFilter: "blur(4px)" }}
                 onMouseEnter={(e) => { e.currentTarget.style.transform="translateY(-6px)"; e.currentTarget.style.borderColor="#4BAB6E"; }}
@@ -652,21 +662,45 @@ maxWidth: isMobile ? "340px" : "260px", background: "rgba(255, 255, 255, 0.92)",
           flex: 1                 // 남은 공간을 다 차지하게 함
         }}>
           {renderHeader()}
-          <div
-  style={{
-    flex: 1,
-    display: "flex",
-    flexDirection: isMobile ? "column" : "row",
-  }}
->
-            <div style={{ width: isMobile ? "100%" : "320px",
-height: isMobile ? "320px" : "100%", background: "#ffffff", borderRight: "1px solid #EAEAEA", padding: "20px 16px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "15px" }}>
+        
+<div style={{
+  display: "flex",
+  flexDirection: isMobile ? "column" : "row",
+  height: "100vh", // 화면 전체 높이를 사용한다고 확실히 지정
+  width: "100%"
+}}>
+       
+<div style={{ 
+  width: isMobile ? "100%" : "320px",
+  height: isMobile ? "250px" : "100%", // 320px에서 250px 정도로 줄임
+  background: "#ffffff", 
+  borderRight: "1px solid #EAEAEA", 
+  padding: "20px 16px", 
+  overflowY: "auto", // 스크롤이 여기서만 되게 제한
+  display: "flex", 
+  flexDirection: "column", 
+  gap: "15px" 
+}}>
               <h3 style={{ margin: "0", fontSize: "18px", fontWeight: "800" }}>🔍 무장애 안전 길찾기</h3>
               
-              <form onSubmit={handleSearchRoute} style={{ display: "flex", flexDirection: "column", gap: "10px", background: "#F8FAFC", padding: "14px", borderRadius: "16px", border: "1px solid #E2E8F0" }}>
+             <form onSubmit={handleSearchRoute} style={{ 
+  display: "flex", 
+  flexDirection: "column", 
+  gap: "5px",              // 기존 10px에서 5px로 줄임 (공간 확보)
+  background: "#F8FAFC", 
+  padding: "10px",         // 기존 14px에서 10px로 줄임 (공간 확보)
+  borderRadius: "16px", 
+  border: "1px solid #E2E8F0" 
+}}>
                 <div>
                   <label style={{ fontSize: "12px", fontWeight: "700", color: "#64748B", display: "block", marginBottom: "4px" }}>🟢 출발지 선택</label>
-                  <select value={startPoint} onChange={(e) => setStartPoint(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: "8px", border: "1px solid #CBD5E1", fontSize: "14px", background: "#fff" }}>
+                  <select value={startPoint} onChange={(e) => setStartPoint(e.target.value)} style={{ 
+    width: "100%", 
+    padding: "6px 10px",   // 8px에서 6px로 줄임
+    borderRadius: "8px", 
+    border: "1px solid #CBD5E1", 
+    fontSize: "13px"       // 살짝 작게
+  }}>
                     <option value="">출발지를 골라주세요</option>
                     <option value="station">📍 화정역</option>
                     <option value="office">📍 덕양구청</option>
@@ -684,11 +718,16 @@ height: isMobile ? "320px" : "100%", background: "#ffffff", borderRight: "1px so
                     <option value="library">📍 화정도서관</option>
                   </select>
                 </div>
-                <button type="submit" style={{ width: "100%", padding: "10px", background: "#1976D2", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "700", cursor: "pointer", marginTop: "5px" }}>🚀 안전 경로 탐색</button>
-                {isRouteSearched && (
-                  <button type="button" onClick={resetRoute} style={{ width: "100%", padding: "8px", background: "#EFF6FF", color: "#1976D2", border: "1px solid #BFDBFE", borderRadius: "10px", fontWeight: "600", cursor: "pointer" }}>🔄 경로 지우기</button>
-                )}
-              </form>
+                <button type="submit" style={{ 
+    width: "100%", 
+    padding: "8px",       // 10px에서 8px로 줄임
+    background: "#1976D2", 
+    color: "#fff", 
+    border: "none", 
+    borderRadius: "10px", 
+    fontWeight: "700" 
+  }}>🚀 안전 경로 탐색</button>
+</form>
 
               <div style={{ flex: 1 }}>
                 {isRouteSearched ? (
@@ -722,8 +761,13 @@ padding: isMobile ? "7px 10px" : "8px 16px", fontWeight: "700", color: "#475569"
               </div>
             </div>
 
-            <div style={{ flex: 1, position: "relative" }}>
-              <MapContainer center={[37.6345, 126.832]} zoom={16} style={{ width: "100%", height: "100%" }}>
+            <div style={{ 
+  flex: 1, 
+  position: "relative",
+  // 모바일일 때는 화면 높이에서 검색창 영역(약 250px)을 뺀 나머지를 쓰게 합니다.
+  height: isMobile ? "calc(100vh - 250px)" : "100%" 
+}}>
+  <MapContainer center={[37.6345, 126.832]} zoom={16} style={{ width: "100%", height: "100%" }}>
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 
                 {markers.map((m) => (
