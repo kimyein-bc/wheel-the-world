@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { divIcon } from "leaflet";
+import { auth, db } from "./firebase";
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import {
   MapContainer,
   TileLayer,
@@ -29,17 +31,73 @@ async function getCoords(place) {
     lng: Number(data[0].lon),
   };
 }
-async function getRoute(start, end) {
-  const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
+async function getRoute(start, end, mode, bfMarkers) {
+console.log("현재 모드:", mode);
+console.log("전체 마커:", bfMarkers);
 
-  const res = await fetch(url);
-  const data = await res.json();
+  let blockedMarkers = [];
 
-  if (!data.routes || !data.routes.length) return null;
+  if (mode === "wheel1") {
+    blockedMarkers = bfMarkers.filter(
+      m => m.wheelLevel === 1 || m.wheelLevel === 2
+    );
+  }
 
-  return data.routes[0].geometry.coordinates.map(
-    (coord) => [coord[1], coord[0]]
+  if (mode === "wheel2") {
+    blockedMarkers = bfMarkers.filter(
+      m => m.wheelLevel === 2
+    );
+  }
+
+  console.log("회피 대상:", blockedMarkers);
+  
+
+  
+  const obstacleOnRoute = blockedMarkers.find(marker =>
+  baseRoute.some(point => {
+
+    const distance = Math.sqrt(
+      Math.pow(point[0] - marker.lat, 2) +
+      Math.pow(point[1] - marker.lng, 2)
+    );
+
+    return distance < 0.0003;
+  })
+);
+
+console.log("경로 위 장애물:", obstacleOnRoute);
+if (!obstacleOnRoute) {
+  console.log("회피할 장애물 없음");
+  return baseRoute;
+}
+const obstacle = obstacleOnRoute;
+
+console.log("선택된 장애물:", obstacle);
+
+const waypoint = {
+  lat: obstacle.lat + 0.0005,
+  lng: obstacle.lng + 0.0005
+};
+
+
+
+const res1 = await fetch(url1);
+const data1 = await res1.json();
+
+const res2 = await fetch(url2);
+const data2 = await res2.json();
+
+const route1 =
+  data1.routes[0].geometry.coordinates.map(
+    coord => [coord[1], coord[0]]
   );
+
+const route2 =
+  data2.routes[0].geometry.coordinates.map(
+    coord => [coord[1], coord[0]]
+  );
+
+return [...route1, ...route2];
 }
 // 기본 마커 아이콘 문제 해결
 delete L.Icon.Default.prototype._getIconUrl;
@@ -85,21 +143,7 @@ function getIcon(type) {
   });
 }
 
-function AddMarker({ setMarkers, selectedType }) {
-  useMapEvents({
-    click(e) {
-      setMarkers(prev => [
-        ...prev,
-        { id: Date.now(),
-  lat: e.latlng.lat,
-  lng: e.latlng.lng,
-  type: selectedType,
-  status: "pending", },
-      ]);
-    },
-  });
-  return null;
-}
+
 function MoveMapToRoute({ route }) {
   const map = useMap();
 
@@ -495,7 +539,7 @@ useEffect(() => {
 }, []);
 
 // 💡 App 컴포넌트 시작 직후 선언부
-const [userRole, setUserRole] = useState("admin"); // 'admin' 또는 'user' (테스트용으로 기본 admin 설정)
+const [userRole, setUserRole] = useState("user"); // 'admin' 또는 'user' (테스트용으로 기본 admin 설정)
 
 // 무장애/위험 요소 마커들을 저장할 배열 상태 (기존 markers 배열이 있다면 합치거나 대체 가능)
 // 💡 App 컴포넌트 내부 최상단 상태 정의 구역 수정
@@ -505,10 +549,11 @@ const [bfMarkers, setBfMarkers] = useState(() => {
   const savedMarkers = localStorage.getItem("wheel_bf_markers");
   if (savedMarkers) {
     try {
-      return JSON.parse(savedMarkers);
-    } catch (e) {
-      console.error("로컬스토리지 데이터 파싱 에러:", e);
-    }
+      const parsed = JSON.parse(savedMarkers);
+
+      // 기존 데이터는 승인된 것으로 간주
+      return parsed.map(m => ({ ...m, status: m.status || "approved" }));
+    } catch (e) { console.error(e); }
   }
   // 기본 데이터 구조 (기존 샘플 유지)
   return [
@@ -527,12 +572,148 @@ useEffect(() => {
   localStorage.setItem("wheel_bf_markers", JSON.stringify(bfMarkers));
 }, [bfMarkers]);
 
+// App.js 내에 배치
+const addOfficialMarker = (newMarker) => {
+  // 1. 새 마커 데이터 생성
+  const markerToAdd = { 
+    ...newMarker, 
+    id: `marker-${Date.now()}`, // ID를 확실하게 생성
+    isOfficial: true, 
+    status: 'approved',
+    date: new Date().toLocaleDateString()
+  };
+
+  // 2. 중요: prev(이전 상태)를 펼쳐서 새 배열을 만드는 것을 명시
+  setBfMarkers(prev => {
+    const updatedMarkers = [...prev, markerToAdd];
+    console.log("업데이트된 전체 마커:", updatedMarkers); // 콘솔에 찍히는지 확인
+    return updatedMarkers;
+  });
+
+  // 3. 폼 상태 초기화
+  setTempMarker(null);
+  setNewMarkerDesc("");
+  setNewMarkerImage(null);
+  setNewMarkerType("step");
+};
+
+// 주민제보와 안전길찾기에서 모두 사용할 통합 검색 함수
+const handleMapSearch = async (e, currentSearchValue) => {
+  e.preventDefault();
+  
+  const target = currentSearchValue.trim();
+  if (!target) return;
+
+  // 1. 고정 장소 리스트(locationPoints)에 있으면 즉시 이동
+  if (locationPoints[target]) {
+    if (mapRef.current) {
+      mapRef.current.flyTo(locationPoints[target], 17, { animate: true, duration: 1.2 });
+    }
+    return;
+  }
+
+  // 2. 새로운 장소는 카카오 API로 정밀 검색
+  try {
+    const searchQuery = target.includes("고양") || target.includes("화정") 
+      ? target 
+      : `경기도 고양시 덕양구 화정동 ${target}`;
+
+    const response = await fetch(
+      `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(searchQuery)}`,
+      {
+        headers: {
+          // 🌟 발급받으신 실제 카카오 REST API 키를 넣어주세요!
+          Authorization: `KakaoAK 1425cc58ea2a07e5aea6e01a9b0dac74` 
+        }
+      }
+    );
+    const data = await response.json();
+
+    if (data.documents && data.documents.length > 0 && mapRef.current) {
+      const lat = parseFloat(data.documents[0].y);
+      const lng = parseFloat(data.documents[0].x);
+
+      // 오픈스트리트맵 지도를 카카오가 찾은 정확한 좌표로 이동!
+      mapRef.current.flyTo([lat, lng], 17, {
+        animate: true,
+        duration: 1.2
+      });
+
+      // 💡 [선택사항] 만약 안전길찾기 탭에서 목적지 좌표 상태(예: setDestination)가 있다면 
+      // 여기에 연동해서 검색한 위치에 목적지 핀을 꽂아줄 수도 있습니다.
+      // if (currentView === "search" && setDestination) {
+      //   setDestination([lat, lng]);
+      // }
+
+    } else {
+      alert(`'${target}'에 대한 정확한 위치를 찾을 수 없습니다.`);
+    }
+  } catch (error) {
+    console.error("카카오 로컬 API 검색 에러:", error);
+    alert("검색 중 오류가 발생했습니다.");
+  }
+};
+
 // 등록 폼 제어를 위한 상태들
 const [tempMarker, setTempMarker] = useState(null); // 지도 클릭 시 임시 마커 좌표
+const handleSearchKeywordChange = async (value) => {
+  setSearchKeyword(value);
+
+  if (!value.trim()) {
+    setSearchSuggestions([]);
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(value)}&size=5`,
+      {
+        headers: {
+          Authorization: `KakaoAK 1425cc58ea2a07e5aea6e01a9b0dac74`
+        }
+      }
+    );
+
+    const data = await res.json();
+
+    setSearchSuggestions(
+      data.documents?.map(item => ({
+        name: item.place_name,
+        lat: Number(item.y),
+        lng: Number(item.x)
+      })) || []
+    );
+  } catch (err) {
+    console.error(err);
+  }
+};
+const handleSearchPlace = async () => {
+
+  if (!searchKeyword.trim()) return;
+
+  const response = await fetch(
+    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchKeyword)}`
+  );
+
+  const data = await response.json();
+
+  if (!data.length) {
+    alert("검색 결과가 없습니다.");
+    return;
+  }
+
+  const lat = Number(data[0].lat);
+  const lng = Number(data[0].lon);
+
+  mapRef.current.flyTo([lat, lng], 18, {
+    duration: 1.5
+  });
+};
+const [searchKeyword, setSearchKeyword] = useState("");
+const [searchSuggestions, setSearchSuggestions] = useState([]);
 const [newMarkerType, setNewMarkerType] = useState("step");
 const [newMarkerDesc, setNewMarkerDesc] = useState("");
 const [newMarkerImage, setNewMarkerImage] = useState(null);
-
 // 5가지 안전/위험 요소 디자인 구성 설정
 const bfConfig = {
   step: { label: "🪜 단차 / 계단", color: "#EF4444", icon: "🪜" },
@@ -561,6 +742,58 @@ const mapRef = useRef(null);
   const [markers, setMarkers] = useState([]);
   const [selectedType, setSelectedType] = useState("stairs");
   const [userLocation, setUserLocation] = useState(null);
+  const [startCoords, setStartCoords] = useState(null);
+const [endCoords, setEndCoords] = useState(null);
+  // 💡 5번 클릭 감지를 위한 상태 및 타이머 설정
+const [clickCount, setClickCount] = useState(0);
+const clickTimeoutRef = useRef(null);
+
+const handleSecretDoorClick = () => {
+  // 이전 타이머가 있다면 초기화
+  if (clickTimeoutRef.current) {
+    clearTimeout(clickTimeoutRef.current);
+  }
+
+  const nextCount = clickCount + 1;
+  setClickCount(nextCount);
+
+  if (nextCount === 5) {
+    // 5번 연속 클릭 성공 시 관리자 모드 진입 및 횟수 리셋
+    setCurrentView("admin");
+    setClickCount(0);
+  } else {
+    // 1초(1000ms) 동안 다음 클릭이 없으면 누적 횟수 초기화
+    clickTimeoutRef.current = setTimeout(() => {
+      setClickCount(0);
+    }, 1000);
+  }
+};
+// 💡 관리자 로그인 입력값을 저장하는 상태 변수
+const [adminEmailInput, setAdminEmailInput] = useState("");
+const [adminPasswordInput, setAdminPasswordInput] = useState("");
+// 💡 관리자 로그인 처리 함수
+const handleLogin = (e) => {
+  e.preventDefault(); // 페이지 새로고침 방지
+
+  // 임시 관리자 계정 정보 (원하는 계정으로 변경 가능)
+  const adminEmail = "wheel0ff@naver.com";
+  const adminPassword = "wheelwheel04";
+
+  if (adminEmailInput === adminEmail && adminPasswordInput === adminPassword) {
+  alert("관리자 인증에 성공했습니다!");
+  setIsAdminLoggedIn(true);
+  setUserRole("admin"); // 👈 여기에 이 한 줄을 추가하여 권한을 넘겨줍니다.
+  setCurrentView("home");
+    
+    // 입력창 초기화
+    setAdminEmailInput("");
+    setAdminPasswordInput("");
+  } else {
+    alert("이메일 또는 비밀번호가 일치하지 않습니다.");
+  }
+};
+// 💡 관리자 로그인 성공 여부를 저장하는 상태 (기본값은 false)
+const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
 const navigateTo = (view) => {
   setCurrentView(view);
   // 브라우저 주소창 기록에 현재 상태를 추가 (뒤로가기 대비)
@@ -569,7 +802,41 @@ const navigateTo = (view) => {
   // 💡 App 컴포넌트 시작 직후 (기존 선언부 자리에 덮어쓰기)
 const [startPoint, setStartPoint] = useState("");
 const [endPoint, setEndPoint] = useState("");
+const [startSuggestions, setStartSuggestions] = useState([]); // 출발지 자동완성 추천 목록
+const [endSuggestions, setEndSuggestions] = useState([]);     // 목적지 자동완성 추천 목록
+
+// 입력어에 따라 카카오 추천 장소를 가져오는 함수
+const fetchAutoComplete = async (keyword, setSuggestions) => {
+  const trimmed = keyword.trim();
+  if (!trimmed || trimmed.length < 2) { // 2글자 이상 입력했을 때부터 검색 시작
+    setSuggestions([]);
+    return;
+  }
+
+  try {
+    // 화정동 주변 위주로 장소를 찾기 위해 행정구역명을 조합합니다.
+    const query = trimmed.includes("고양") || trimmed.includes("화정") ? trimmed : `고양 화정 ${trimmed}`;
+    
+    const res = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=5`, {
+      headers: { 
+        // 🔑 발급받으신 실제 카카오 REST API 키를 넣어주세요!
+        Authorization: `KakaoAK 1425cc58ea2a07e5aea6e01a9b0dac74` 
+      }
+    });
+    const data = await res.json();
+
+    if (data.documents) {
+      // 카카오가 찾아준 실제 정확한 장소명(place_name)들만 추출해서 상태에 저장
+      const names = data.documents.map(doc => doc.place_name);
+      setSuggestions(names);
+    }
+  } catch (err) {
+    console.error("자동완성 데이터 로드 실패:", err);
+  }
+};
 const [routeSteps, setRouteSteps] = useState([]);
+const [routeMode, setRouteMode] = useState("normal");
+const [wheelLevel, setWheelLevel] = useState(1);
 const [routeGuide, setRouteGuide] = useState([]);         
 const [isRouteSearched, setIsRouteSearched] = useState(false);
 const [animatedRoute, setAnimatedRoute] = useState([]);
@@ -577,13 +844,14 @@ const [startMarkerPos, setStartMarkerPos] = useState(null);
 const [endMarkerPos, setEndMarkerPos] = useState(null);
 const animationRef = useRef(null);
 const [isFollowingUser, setIsFollowingUser] = useState(false);
+const [isAdmin, setIsAdmin] = useState(false);
 // ✨ 한글 선택지로도 바로 위도/경도를 매칭할 수 있도록 키값을 확장했습니다!
 const locationPoints = {
   station: [37.6345, 126.832],  
   office: [37.6373, 126.8315],  
   park: [37.6332, 126.8355],    
   library: [37.6391, 126.834],  
-  " 화정역": [37.6345, 126.832],
+  "화정역": [37.6345, 126.832],
   "덕양구청": [37.6373, 126.8315],
   "화정 중앙공원": [37.6332, 126.8355],
   "화정도서관": [37.6391, 126.834],
@@ -601,11 +869,11 @@ const animateWheelTrack = (fullRoute) => {
     currentStep++;
     const progress = currentStep / totalSteps;
 
-  if (progress >= 1) {
-  setAnimatedRoute(fullRoute);
-  cancelAnimationFrame(animationRef.current);
-  return;
-}
+    if (progress >= 1) {
+      setAnimatedRoute(fullRoute);
+      cancelAnimationFrame(animationRef.current);
+      return;
+    }
 
     const totalSegments = fullRoute.length - 1;
     const currentProgressFull = progress * totalSegments;
@@ -620,10 +888,8 @@ const animateWheelTrack = (fullRoute) => {
       const lng = currentSegmentStart[1] + (currentSegmentEnd[1] - currentSegmentStart[1]) * segmentProgress;
       const currentPos = [lat, lng];
 
-      // 💡 [여기 수정] 데이터를 가공할 때 리플렛이 좋아하는 깔끔한 [[위도, 경도]] 순수 배열 형태로 강제 변환합니다.
+      // 리플렛이 좋아하는 [[위도, 경도]] 순수 배열 형태로 변환하여 병합
       const passedRoute = fullRoute.slice(0, segmentIndex + 1).map(pt => [pt[0], pt[1]]);
-      
-      // 최종 배열이 깨지지 않게 확실하게 합쳐서 저장
       setAnimatedRoute([...passedRoute, currentPos]);
     }
 
@@ -633,41 +899,165 @@ const animateWheelTrack = (fullRoute) => {
   animationRef.current = requestAnimationFrame(updateTrack);
 };
 
+const ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjZiMjY1Y2E5NjZjODQxZmE5MjJjNDEzM2IyYWNhN2U2IiwiaCI6Im11cm11cjY0In0=";
+
+const getRoute = async (start, end) => {
+  try {
+    // 1. URL이 api.heigit.org로 되어 있는지 확인하세요!
+    const url =
+  "https://api.openrouteservice.org/v2/directions/wheelchair/geojson";
+    
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+  Authorization: ORS_API_KEY,
+  "Content-Type": "application/json",
+},
+      body: JSON.stringify({
+        coordinates: [
+          [start.lng, start.lat], // [경도, 위도] 순서 중요!
+          [end.lng, end.lat],
+        ],
+      }),
+    });
+
+    const data = await res.json();
+    
+    // 2. 응답 데이터 확인 (무슨 에러가 나는지 콘솔에서 확인)
+    console.log("ORS 최종 응답:", data);
+
+    if (data.error) {
+      console.error("API 에러 상세:", data.error);
+      return [];
+    }
+
+    // 3. 좌표 추출 (ORS 응답 구조에 맞춤)
+    if (!data.features || data.features.length === 0) return [];
+    
+    return data.features[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+
+  } catch (err) {
+    console.error("getRoute 오류:", err);
+    return [];
+  }
+};
 const handleSearchRoute = async (e) => {
   e.preventDefault();
 
-  if (!startPoint || !endPoint) {
-    alert("출발지와 목적지를 선택해 주세요!");
+  // 인풋 양쪽 공백 제거
+  const start = startPoint ? startPoint.trim() : "";
+  const end = endPoint ? endPoint.trim() : "";
+
+  if (!start || !end) {
+    alert("출발지와 목적지를 모두 입력하거나 선택해 주세요!");
     return;
   }
 
-  if (startPoint === endPoint) {
+  if (start === end) {
     alert("출발지와 목적지가 같습니다.");
     return;
   }
 
   try {
-    // 🔥 1. 좌표 변환
-    // 검색어 뒤에 " 고양시"를 붙여서 엉뚱한 다른 지역(광주 등)이 검색되는 걸 막습니다.
-const startPos = await getCoords(startPoint + " 고양시");
-const endPos = await getCoords(endPoint + " 고양시");
-setStartMarkerPos([startPos.lat, startPos.lng]);
-setEndMarkerPos([endPos.lat, endPos.lng]);
-    console.log("startPos:", startPos);
-    console.log("endPos:", endPos);
+    // 🔑 카카오 로컬 API 검색용 헬퍼 함수
+    const searchKakaoCoords = async (placeName) => {
+      // 이미 기존 고정 리스트(locationPoints)에 완벽히 일치하는 단어면 즉시 {lat, lng} 객체로 반환
+      if (locationPoints[placeName]) {
+        const coords = locationPoints[placeName];
+        return { lat: coords[0], lng: coords[1] };
+      }
 
+      // 목록에 없는 새로운 단어(세이브존 등)면 카카오 API 호출
+      const query = placeName.includes("고양") || placeName.includes("화정") 
+        ? placeName 
+        : `경기도 고양시 덕양구 화정동 ${placeName}`;
+      
+      const res = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}`, {
+        headers: { 
+          // 🌟 여기에 실제 카카오 REST API 키를 넣어주세요!
+          Authorization: `KakaoAK 1425cc58ea2a07e5aea6e01a9b0dac74` 
+        }
+      });
+      const data = await res.json();
+      
+      if (data.documents && data.documents.length > 0) {
+        return {
+          lat: parseFloat(data.documents[0].y), // 위도
+          lng: parseFloat(data.documents[0].x)  // 경도
+        };
+      }
+      return null;
+    };
+
+    // 🔍 출발지와 목적지 좌표를 카카오/고정목록 하이브리드로 가져오기
+    // 내 위치일 때는 저장된 좌표를 쓰고, 아니면 검색함
+let startPos;
+
+
+if (start === "내 위치") {
+  if (!userLocation || userLocation.length < 2) {
+    alert("현재 위치를 먼저 가져와 주세요!");
+    return;
+  }
+
+  startPos = {
+    lat: userLocation[0],
+    lng: userLocation[1]
+  };
+} else {
+  startPos = await searchKakaoCoords(start);
+}
+
+let endPos;
+
+if (end === "내 위치") {
+  if (!userLocation || userLocation.length < 2) {
+    alert("현재 위치를 먼저 가져와 주세요!");
+    return;
+  }
+
+  endPos = {
+    lat: userLocation[0],
+    lng: userLocation[1]
+  };
+} else {
+  endPos = await searchKakaoCoords(end);
+}
+
+// 만약 '내 위치'를 눌렀는데 startCoords가 null이면 오류 방지
+if (start === "내 위치" && !startCoords) {
+  alert("현재 위치를 먼저 가져와 주세요!");
+  return;
+}
+console.log("출발 마커:", [
+  startPos.lat,
+  startPos.lng
+]);
+
+console.log("도착 마커:", [
+  endPos.lat,
+  endPos.lng
+]);
     if (!startPos || !endPos) {
-      alert("좌표를 찾을 수 없습니다 (주소 인식 실패)");
+      alert("장소의 좌표를 찾을 수 없습니다. 정확한 명칭인지 확인해 주세요!");
       return;
     }
 
-    // 🔥 2. 경로 생성
-    const route = await getRoute(startPos, endPos);
+    // 📍 원래 코드 포맷인 배열 형태로 마커 위치 저장 [lat, lng]
+    setStartMarkerPos([startPos.lat, startPos.lng]);
+    setEndMarkerPos([endPos.lat, endPos.lng]);
 
-    console.log("route:", route);
+    // 🔥 2. 경로 생성 (getRoute 함수가 {lat, lng} 객체를 정상적으로 받도록 전달)
+    const route = await getRoute(
+  startPos,
+  endPos,
+  routeMode,
+  bfMarkers
+);
+    console.log("생성된 route 선 데이터:", route);
 
-    if (!route) {
-      alert("경로 생성 실패");
+    if (!route || route.length === 0) {
+      alert("경로 생성 실패 (매칭되는 도보/도로가 없습니다)");
       return;
     }
 
@@ -681,32 +1071,32 @@ setEndMarkerPos([endPos.lat, endPos.lng]);
     // 🔥 4. 지도 경로 저장
     setRouteSteps(route);
 
-    // 🔥 5. 안내문
+    // 🔥 5. 안내문 처리
     let guide = ["📍 출발지에서 이동 시작"];
-
-    if (startPoint === "station" && endPoint === "office") {
+    // 고정 예시 조합일 때만 특수 안내문 띄우기
+    if (start === "화정역" && end === "덕양구청") {
       guide.push("🚶 횡단보도 단차 구간 주의");
       guide.push("♿ 경사로 이용 추천");
     } else {
-      guide.push("🚶 안전 경로 안내");
+      guide.push("🚶 안전 보행 경로 안내");
     }
-
     guide.push("🏁 도착");
 
     setRouteGuide(guide);
     setIsRouteSearched(true);
-setRouteSteps(route);   
-console.log("routeSteps 저장:", route);
-console.log("첫 번째 값:", route[0]);    
+    
+    // 휠체어 바퀴 자국 애니메이션 실행
     setAnimatedRoute([]);
-setTimeout(() => {
-  animateWheelTrack(route);
-}, 1600);
+    setTimeout(() => {
+      animateWheelTrack(route);
+    }, 1600);
+
   } catch (err) {
-    console.error(err);
+    console.error("최종 경로 탐색 에러:", err);
     alert("삐빅! 경로 생성 중 오류 발생!");
   }
 };
+// 💡 이미지 첨부 시 호출되는 Base64 인코더
 // 💡 이미지 첨부 시 호출되는 Base64 인코더
 const handleBfImageChange = (e) => {
   const file = e.target.files[0];
@@ -719,185 +1109,163 @@ const handleBfImageChange = (e) => {
   }
 };
 
+// 관리자 승인 페이지 예시 코드
+
+const pendingMarkers = bfMarkers.filter(m => m.status === 'pending');
+
+
+
+// 승인 함수
+
+const approveMarker = (id) => {
+
+  setBfMarkers(prev => prev.map(m => 
+
+    m.id === id ? { ...m, status: 'approved' } : m
+
+  ));
+
+}; 
+
 // 💡 새 마커 최종 등록 함수 (관리자 전용)
 const handleAddBfMarker = () => {
-  if (!newMarkerDesc.trim()) {
-    alert("상세 설명을 입력해주세요!");
+
+  if (!isAdminLoggedIn) {
+
+    alert("권한이 없습니다. 관리자 로그인 후 이용해주세요.");
+
     return;
+
   }
 
-  const approveMarker = (marker) => {
-  const convertType = {
-    stairs: "step",
-    ramp: "elevator",
-    bump: "obstacle",
-  };
+  if (!newMarkerDesc.trim()) {
 
-  const approvedMarker = {
-    id: `approved-${marker.id}`,
-    lat: marker.lat,
-    lng: marker.lng,
-    type: convertType[marker.type] || "obstacle",
-    desc: "주민 제보 승인 데이터",
-    image: null,
-    date: new Date().toLocaleDateString(),
-  };
+    alert("상세 설명을 입력해주세요!");
 
-  setBfMarkers((prev) => [...prev, approvedMarker]);
+    return;
 
-  setMarkers((prev) =>
-    prev.filter((item) => item.id !== marker.id)
-  );
+  }
+
+
+const newBfData = {
+  id: `bf-${Date.now()}`,
+  lat: tempMarker.lat,
+  lng: tempMarker.lng,
+  type: newMarkerType,
+  desc: newMarkerDesc,
+  image: newMarkerImage,
+  date: new Date().toLocaleDateString(),
+
+  wheelLevel,
+
+  status: "approved",
+  isOfficial: true,
 };
 
-  const newBfData = {
-    id: `bf-${Date.now()}`,
-    lat: tempMarker.lat,
-    lng: tempMarker.lng,
-    type: newMarkerType,
-    desc: newMarkerDesc,
-    image: newMarkerImage,
-    date: new Date().toLocaleDateString(),
-  };
+console.log("등록되는 데이터:", newBfData);
+console.log("wheelLevel =", newBfData.wheelLevel);
 
   setBfMarkers((prev) => [...prev, newBfData]);
-  
+
+ 
+
   // 폼 초기화 및 닫기
+
   setTempMarker(null);
+
   setNewMarkerDesc("");
+
   setNewMarkerImage(null);
+
   setNewMarkerType("step");
+
 };
-const moveToMyLocation = () => {
+
+// setPoint 파라미터를 추가합니다. (예: setStartPoint 또는 setEndPoint)
+const moveToMyLocation = async (setPoint, setCoords) => {
   if (!navigator.geolocation) {
     alert("이 브라우저에서는 GPS를 지원하지 않습니다.");
     return;
   }
 
   navigator.geolocation.getCurrentPosition(
-    (position) => {
+    async (position) => {
       const lat = position.coords.latitude;
       const lng = position.coords.longitude;
-
       const myLocation = [lat, lng];
 
       setUserLocation(myLocation);
 
-      // 🔥 경로 자동 이동 잠시 끄기
+if (setCoords) {
+  const coords = {
+    lat,
+    lng,
+  };
+
+  console.log("저장되는 좌표:", coords);
+
+  setCoords(coords);
+}
       setIsFollowingUser(true);
 
       if (mapRef.current) {
-        mapRef.current.flyTo(myLocation, 17, {
-          duration: 1.5,
-        });
+        mapRef.current.flyTo(myLocation, 17, { duration: 1.5 });
       }
 
-      // 3초 뒤 다시 경로 이동 허용
+      // --- 📍 수정된 부분: 주소 변환 안 하고 '내 위치'라고만 적기 ---
+      if (setPoint) {
+        setPoint("내 위치"); // 입력창에 '내 위치'라는 글자만 띄움
+      }
+      // ----------------------------------------------------
+
       setTimeout(() => {
         setIsFollowingUser(false);
       }, 3000);
     },
-
     (error) => {
       console.error(error);
       alert("현재 위치를 가져올 수 없습니다.");
     },
-
-    {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 0,
-    }
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
   );
 };
 function MapSetter({ mapRef }) {
   const map = useMap();
-
   useEffect(() => {
     mapRef.current = map;
   }, [map]);
-
   return null;
 }
-  const resetRoute = () => {
-    if (animationRef.current) cancelAnimationFrame(animationRef.current);
-    setStartPoint("");
-    setEndPoint("");
-    setAnimatedRoute([]);
-    setRouteSteps([]);
-    setIsRouteSearched(false);
-  };
 
-  useEffect(() => {
-    return () => { if (animationRef.current) cancelAnimationFrame(animationRef.current); };
-  }, []);
+const resetRoute = () => {
+  if (animationRef.current) cancelAnimationFrame(animationRef.current);
+  setStartPoint("");
+  setEndPoint("");
+  setAnimatedRoute([]);
+  setRouteSteps([]);
+  setIsRouteSearched(false);
+};
 
- const renderHeader = () => (
+useEffect(() => {
+  return () => { if (animationRef.current) cancelAnimationFrame(animationRef.current); };
+}, []);
+
+const renderHeader = () => (
   <div style={{
-    position: "fixed",
-    top: 0,
-    left: 0,
-    width: "100%",
-    height: "60px", // 50px에서 약간 키워 안정감 확보
-    background: "#fff",
-    zIndex: 2000,
-    display: "flex",
-    justifyContent: "space-between", // space-around보다 정돈됨
-    alignItems: "center",
-    padding: "0 10px",
-    boxSizing: "border-box",
-    borderBottom: "1px solid #eee"
+    position: "fixed", top: 0, left: 0, width: "100%", height: "60px",
+    background: "#fff", zIndex: 2000, display: "flex",
+    justifyContent: "space-between", alignItems: "center",
+    padding: "0 10px", boxSizing: "border-box", borderBottom: "1px solid #eee"
   }}>
-   
-  <div
-  style={{
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "flex-start",
-
-    width: isMobile ? "95px" : "150px",
-    height: "50px",
-
-    position: "relative",
-    flexShrink: 0,
-  }}
->
-  <button
-    onClick={() => setCurrentView("home")}
-    style={{
-      all: "unset",
-
-      width: "100%",
-      height: "100%",
-
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "flex-start",
-
-      cursor: "pointer",
-
-      position: "relative",
-      zIndex: 2,
-    }}
-  >
-    <div
-      style={{
-        transform: isMobile ? "scale(0.24)" : "scale(0.40)",
-        transformOrigin: "left center",
-
-        pointerEvents: "none",
-
-        marginLeft: isMobile ? "-14px" : "-6px",
-      }}
-    >
-      <SimpleTextLogo />
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", width: isMobile ? "95px" : "150px", height: "50px", position: "relative", flexShrink: 0 }}>
+      <button onClick={() => setCurrentView("home")} style={{ all: "unset", width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "flex-start", cursor: "pointer", position: "relative", zIndex: 2 }}>
+        <div style={{ transform: isMobile ? "scale(0.24)" : "scale(0.40)", transformOrigin: "left center", pointerEvents: "none", marginLeft: isMobile ? "-14px" : "-6px" }}>
+          <SimpleTextLogo />
+        </div>
+      </button>
     </div>
-  </button>
-</div>
-   
     
     <div style={{ display: "flex", gap: "5px" }}>
-      {/* 텍스트 대신 아이콘 위주로 구성하면 모바일에서 훨씬 깔끔합니다 */}
       <button onClick={() => { setCurrentView("search"); resetRoute(); }} style={{ padding: "8px", border: "none", borderRadius: "8px", background: "#F5F5F7" }}>🗺️</button>
       <button onClick={() => setCurrentView("create")} style={{ padding: "8px", border: "none", borderRadius: "8px", background: "#F5F5F7" }}>✍️</button>
     </div>
@@ -905,18 +1273,35 @@ function MapSetter({ mapRef }) {
 );
 
 return (
-    <div style={{ 
-      width: "100%",            // 브라우저 너비 전체를 사용
-      minHeight: "100vh",       // 최소 높이를 화면 전체로 설정
-      display: "flex", 
-      flexDirection: "column", 
-      alignItems: "center",     // [중요] 모든 자식 요소를 가로 중앙으로 정렬
-      overflowX: "hidden",      // [중요] 화면 밖으로 넘치는 콘텐츠가 있어도 가로 스크롤을 막음
-      boxSizing: "border-box"   // 패딩이나 테두리가 너비를 넘치게 하지 않도록 함
-    }}>
+  <div style={{ width: "100%", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", overflowX: "hidden", boxSizing: "border-box" }}>
+    
+    {/* 🔒 [신규] 관리자 디버그 로그인 뷰 처리 */}
+    {currentView === "admin" && (
+      <div className="login-box" style={{ padding: "30px 20px", maxWidth: "400px", width: "90%", margin: "100px auto", border: "1px solid #E2E8F0", borderRadius: "24px", boxShadow: "0 10px 25px rgba(0,0,0,0.05)", background: "#fff", textAlign: "center" }}>
+        <h2 style={{ fontSize: "22px", fontWeight: "800", marginBottom: "8px" }}>🔐 관리자 모드 로그인</h2>
+        <p style={{ fontSize: "13px", color: "#64748B", marginBottom: "24px" }}>등록 시스템 설정을 변경할 수 있습니다.</p>
+        <form onSubmit={handleLogin}>
+          <input 
+            type="email" 
+            placeholder="이메일 주소 (admin@wheel.com)" 
+            value={adminEmailInput} 
+            onChange={(e) => setAdminEmailInput(e.target.value)} 
+            style={{ display: "block", width: "100%", marginBottom: "12px", padding: "12px", borderRadius: "12px", border: "1px solid #CBD5E1", boxSizing: "border-box" }}
+          />
+          <input 
+            type="password" 
+            placeholder="비밀번호" 
+            value={adminPasswordInput} 
+            onChange={(e) => setAdminPasswordInput(e.target.value)} 
+            style={{ display: "block", width: "100%", marginBottom: "20px", padding: "12px", borderRadius: "12px", border: "1px solid #CBD5E1", boxSizing: "border-box" }}
+          />
+          <button type="submit" style={{ width: "100%", padding: "14px", background: "#1976D2", color: "white", border: "none", borderRadius: "12px", fontWeight: "700", cursor: "pointer", fontSize: "15px" }}>로그인 완료</button>
+        </form>
+        <button onClick={() => setCurrentView("home")} style={{ marginTop: "16px", background: "none", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: "14px", textDecoration: "underline" }}>뒤로가기</button>
+      </div>
+    )}
       
 
-    {/* 1. 메인 홈 화면 */}
  {/* 1. 메인 홈 화면 */}
 {currentView === "home" && (
   <div
@@ -1134,8 +1519,22 @@ return (
           </p>
         </div>
       </div>
+      {/* 🚪 5번 클릭 비밀 문 */}
+<footer 
+  onClick={handleSecretDoorClick} 
+  style={{ 
+    marginTop: "40px", 
+    fontSize: "11px", 
+    color: "rgba(0,0,0,0.3)", 
+    cursor: "pointer", 
+    userSelect: "none" 
+  }}
+>
+  © 2026 Wheel the World. 
+</footer>
     </div>
   </div>
+  
 )}
 
       {/* 2. 안전 길찾기 화면 */}
@@ -1143,16 +1542,20 @@ return (
         <div style={{ 
           width: "100%", 
           maxWidth: "850px",      
-          flex: 1                 
+          flex: 1   
+                        
         }}>
           {renderHeader()}
           
-          <div style={{
-            display: "flex",
-            flexDirection: isMobile ? "column" : "row",
-            height: "100vh", 
-            width: "100%"
-          }}>
+          <div
+  style={{
+    display: "flex",
+    flexDirection: isMobile ? "column" : "row",
+    height: "calc(100vh - 60px)",
+    width: "100%",
+    marginTop: "60px"
+  }}
+>
                  
             {/* 왼쪽 사이드바 영역 */}
             <div style={{ 
@@ -1166,7 +1569,7 @@ return (
               flexDirection: "column", 
               gap: "15px" 
             }}>
-              <h3 style={{ margin: "0", fontSize: "18px", fontWeight: "800" }}>🔍 무장애 안전 길찾기</h3>
+              
               
               <form 
                 onSubmit={handleSearchRoute} 
@@ -1180,49 +1583,194 @@ return (
                   borderRadius: "16px", 
                   border: "1px solid #E2E8F0" 
                 }}
-              >
-                <div onClick={(e) => e.stopPropagation()}>
-                  <label style={{ fontSize: "12px", fontWeight: "700", color: "#64748B", marginBottom: "5px", display: "block" }}>🟢 출발지 선택</label>
-                  <input
-                    list="start-options"
-                    value={startPoint}
-                    onChange={(e) => setStartPoint(e.target.value)}
-                    placeholder="출발지 입력 또는 선택"
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      borderRadius: "8px",
-                      border: "1px solid #CBD5E1"
-                    }}
-                  />
-                  <datalist id="start-options">
-                    <option value=" 화정역" />
-                    <option value="덕양구청" />
-                    <option value="화정 중앙공원" />
-                    <option value="화정도서관" />
-                  </datalist>
-                </div>
+              ><div onClick={(e) => e.stopPropagation()} style={{ position: "relative" }}>
+<div
+  style={{
+    display: "flex",
+    gap: "4px",
+    marginBottom: "15px",
+    padding: "4px",
+    background: "#E2E8F0",
+    borderRadius: "8px"
+  }}
+>
+  {[
+    { id: "normal", label: "일반 모드" },
+    { id: "wheel1", label: "바퀴 모드 1" },
+    { id: "wheel2", label: "바퀴 모드 2" }
+  ].map((mode) => (
+    <button
+      key={mode.id}
+      type="button"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setRouteMode(mode.id);
+      }}
+      style={{
+        flex: 1,
+        padding: "8px 0",
+        border: "none",
+        borderRadius: "6px",
+        fontSize: "14px",
+        fontWeight: routeMode === mode.id ? "600" : "400",
+        background:
+          routeMode === mode.id ? "white" : "transparent",
+        color:
+          routeMode === mode.id ? "#1E293B" : "#475569",
+        cursor: "pointer",
+        transition: "all 0.2s ease"
+      }}
+    >
+      {mode.label}
+    </button>
+  ))}
+</div>
+  
+  {/* 📍 입력창과 버튼을 나란히 배치 */}
+  <div style={{ display: "flex", gap: "5px" }}>
+    <input
+      value={startPoint}
+      onChange={(e) => {
+  setStartPoint(e.target.value);
 
-                <div onClick={(e) => e.stopPropagation()}>
-                  <label style={{ fontSize: "12px", fontWeight: "700", color: "#64748B", marginBottom: "5px", display: "block" }}>🔴 목적지 선택</label>
-                  <input
-                    list="end-options"
-                    value={endPoint}
-                    onChange={(e) => setEndPoint(e.target.value)}
-                    placeholder="목적지 입력 또는 선택"
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      borderRadius: "8px",
-                      border: "1px solid #CBD5E1"
-                    }}
-                  />
-                  <datalist id="end-options">
-                    <option value="화정역" />
-                    <option value="덕양구청" />
-                    <option value="화정 중앙공원" />
-                    <option value="화정도서관" />
-                  </datalist>
+  setStartCoords(null);
+
+  fetchAutoComplete(
+    e.target.value,
+    setStartSuggestions
+  );
+}}
+      placeholder="출발지 입력 또는 선택"
+      style={{
+        flex: 1, // 남은 공간 모두 차지
+        padding: "10px",
+        borderRadius: "8px",
+        border: "1px solid #CBD5E1"
+      }}
+    />
+   <button
+  type="button"
+  onClick={(e) => {
+    e.stopPropagation();
+
+    moveToMyLocation(
+      setStartPoint,
+      setStartCoords
+    );
+  }}
+      style={{
+        padding: "10px",
+        borderRadius: "8px",
+        background: "#3B82F6",
+        color: "white",
+        border: "none",
+        cursor: "pointer",
+        fontWeight: "bold"
+      }}
+    >
+      📍
+    </button>
+  </div>
+                  
+  {/* 출발지 자동완성 리스트 */}
+  {startSuggestions.length > 0 && (
+    <ul style={{
+      position: "absolute", zIndex: 1000, background: "#fff", width: "100%", // width를 100%로 수정하여 정렬
+      border: "1px solid #E2E8F0", borderRadius: "8px", marginTop: "4px",
+      boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)", padding: "5px 0", listStyle: "none"
+    }}>
+      {startSuggestions.map((name, idx) => (
+        <li 
+          key={idx}
+          onClick={() => {
+  setStartPoint(name);
+
+  setStartCoords(null);
+
+  setStartSuggestions([]);
+}}
+          style={{ padding: "8px 12px", fontSize: "13px", cursor: "pointer", borderBottom: "1px solid #F1F5F9" }}
+          onMouseEnter={(e) => e.target.style.background = "#F1F5F9"}
+          onMouseLeave={(e) => e.target.style.background = "transparent"}
+        >
+          🔍 {name}
+        </li>
+      ))}
+    </ul>
+  )}
+</div>
+
+               <div onClick={(e) => e.stopPropagation()} style={{ position: "relative" }}>
+  
+  
+  <div style={{ display: "flex", gap: "5px" }}>
+    <input
+      value={endPoint}
+      onChange={(e) => {
+  setEndPoint(e.target.value);
+
+  setEndCoords(null);
+
+  fetchAutoComplete(
+    e.target.value,
+    setEndSuggestions
+  );
+}}
+      placeholder="목적지 입력 또는 선택"
+      style={{
+        flex: 1,
+        padding: "10px",
+        borderRadius: "8px",
+        border: "1px solid #CBD5E1"
+      }}
+    />
+    <button 
+      type="button" 
+      onClick={() =>
+ moveToMyLocation(
+  setEndPoint,
+  setEndCoords
+)
+}
+      style={{
+        padding: "10px",
+        borderRadius: "8px",
+        background: "#3B82F6",
+        color: "white",
+        border: "none",
+        cursor: "pointer",
+        fontWeight: "bold"
+      }}
+    >
+      📍
+    </button>
+  </div>
+                
+                  {/* 목적지 인풋 바로 아래에 삽입 */}
+{endSuggestions.length > 0 && (
+  <ul style={{
+    position: "absolute", zIndex: 1000, background: "#fff", width: "90%",
+    border: "1px solid #E2E8F0", borderRadius: "8px", marginTop: "4px",
+    boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)", padding: "5px 0", listStyle: "none"
+  }}>
+    {endSuggestions.map((name, idx) => (
+      <li 
+        key={idx}
+        onClick={() => {
+          setEndPoint(name); 
+          setEndCoords(null);      // 클릭한 정확한 이름으로 인풋창 입력값 변경
+          setEndSuggestions([]);   // 추천 창 닫기
+        }}
+        style={{ padding: "8px 12px", fontSize: "13px", cursor: "pointer", borderBottom: "1px solid #F1F5F9" }}
+        onMouseEnter={(e) => e.target.style.background = "#F1F5F9"}
+        onMouseLeave={(e) => e.target.style.background = "transparent"}
+      >
+        🔍 {name}
+      </li>
+    ))}
+  </ul>
+)}
                 </div>
 
                 <button type="submit" style={{ 
@@ -1239,51 +1787,9 @@ return (
                 </button>
               </form>
 
-              <div style={{ flex: 1 }}>
-                {isRouteSearched ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                    <span style={{ fontSize: isMobile ? "12px" : "14px", padding: isMobile ? "7px 10px" : "8px 16px", fontWeight: "700", color: "#475569" }}>📋 실시간 보행 가이드</span>
-                    {routeSteps.map((step, idx) => (
-                      <div key={idx} style={{ padding: "12px", background: idx === 0 || idx === routeSteps.length - 1 ? "#F0FDF4" : "#FFF", border: "1px solid #E2E8F0", borderRadius: "12px", fontSize: "13px", lineHeight: "1.5" }}>
-                        {step}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ background: "#F5F5F7", padding: "12px", borderRadius: "10px", fontSize: "14px", display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
-                      <span>📌 주변 수집 정보</span> <span style={{ color: "#1976D2", fontWeight: "700" }}>{markers.length}개</span>
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                      {markers.length === 0 ? (
-                        <div style={{ textAlign: "center", color: "#AAA", fontSize: "13px", marginTop: "30px" }}>제보된 마커가 없습니다.<br/>주민 제보 탭에서 등록해 보세요!</div>
-                      ) : (
-                        markers.map((m) => (
-  <div key={m.id}>
-    <span>
-      {m.type === "stairs"
-        ? "🪜"
-        : m.type === "ramp"
-        ? "♿"
-        : "⚠️"}
-    </span>
-
-    <b>{getLabel(m.type)}</b>
-
-    {userRole === "admin" && (
-      <button
-        onClick={() => approveMarker(m)}
-      >
-        승인
-      </button>
-    )}
-  </div>
-))
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+             <div style={{ flex: 1, padding: "20px", color: "#94a3b8", fontSize: "13px", textAlign: "center" }}>
+  안전 경로 탐색을 원하시면 출발지와 목적지를 입력해 주세요.
+</div>
             </div>
 
             {/* 오른쪽 지도 영역 */}
@@ -1292,32 +1798,10 @@ return (
               position: "relative",
               height: isMobile ? "calc(100vh - 250px)" : "100%" 
             }}>
-              <button
-                onClick={moveToMyLocation}
-                style={{
-                  position: "absolute",
-                  right: "20px",
-                  bottom: "20px",
-                  zIndex: 1000,
-                  width: "52px",
-                  height: "52px",
-                  borderRadius: "14px",
-                  border: "none",
-                  background: "#fff",
-                  boxShadow: "0 4px 15px rgba(0,0,0,0.2)",
-                  fontSize: "24px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                📍
-              </button>
+              
               
               <MapContainer
   // 🌟 경로 탐색 시 자식 요소들이 확실히 새로 고쳐지도록 데이터 기반 key 적용
-  key={`map-container-${routeSteps.length}`}
   center={[37.6345, 126.832]}
   zoom={16}
   style={{ width: "100%", height: "100%" }}
@@ -1357,25 +1841,25 @@ return (
     </Marker>
   ))}
 
-  {/* 🔒 [권한 제어] 관리자(admin)일 때만 지도 클릭 시 제보 마커 팝업 생성 기능 활성화 */}
-  {userRole === "admin" && (
-    <span style={{ display: "none" }}>
-      {(() => {
-        const MapEvents = () => {
-          useMapEvents({
-            click(e) {
-              const { lat, lng } = e.latlng;
-              setTempMarker({ lat, lng });
-            },
-          });
-          return null;
-        };
-        return <MapEvents />;
-      })()}
-    </span>
-  )}
+ {/* 🔒 [권한 제어] 지도 클릭 이벤트 처리 컴포넌트 */}
+{(() => {
+  const MapEvents = () => {
+    useMapEvents({
+      click(e) {
+        // 🚨 관리자(admin)가 아니라면 마커 등록 창이 뜨지 않도록 함수를 바로 종료합니다.
+        if (userRole !== "admin") return;
+
+        const { lat, lng } = e.latlng;
+        setTempMarker({ lat, lng });
+      },
+    });
+    return null;
+  };
+  return <MapEvents />;
+})()}
 
   {/* 🛠️ [관리자 전용] 지도 클릭 시 열리는 5대 안전 요인 등록 팝업 폼 */}
+  
   {tempMarker && userRole === "admin" && (
     <Marker position={[tempMarker.lat, tempMarker.lng]}>
       <Popup minWidth={260}>
@@ -1413,7 +1897,16 @@ return (
               <img src={newMarkerImage} alt="미리보기" style={{ width: "100%", maxHeight: "100px", objectFit: "cover", borderRadius: "4px", marginTop: "6px" }} />
             )}
           </div>
-
+<select
+  value={wheelLevel}
+  onChange={(e) => {
+    console.log("선택 변경:", e.target.value);
+    setWheelLevel(Number(e.target.value));
+  }}
+>
+  <option value={1}>🟡 1단계</option>
+  <option value={2}>🔴 2단계</option>
+</select>
           <div style={{ display: "flex", gap: "4px" }}>
             <button onClick={handleAddBfMarker} style={{ flex: 1, background: "#2563EB", color: "white", border: "none", padding: "6px", borderRadius: "4px", fontWeight: "bold", fontSize: "12px", cursor: "pointer" }}>등록</button>
             <button onClick={() => setTempMarker(null)} style={{ background: "#EF4444", color: "white", border: "none", padding: "6px", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}>취소</button>
@@ -1424,18 +1917,30 @@ return (
   )}
 
   {/* 👀 [공통 조회 및 관리자 삭제] 등록된 안전 요인 마커 렌더링 */}
-  {bfMarkers.map((m) => {
+{bfMarkers
+  // 안전길찾기 지도와 주민제보 지도 모두 이 조건을 사용하세요
+.filter((m) => m.isOfficial === true || m.status === "approved")// ★ 조건 추가: 공식 마커이거나 승인된 마커만 표시
+  .map((m) => {
     const config = bfConfig[m.type] || { color: "#6B7280", icon: "📍", label: "기타" };
+    
     return (
       <Marker 
-        key={m.id} 
+        key={m.id} // ★ key는 반드시 고유한 m.id여야 함
         position={[m.lat, m.lng]}
         icon={divIcon({
           html: `
             <div style="
               display: flex; align-items: center; justify-content: center;
               width: 34px; height: 34px; background: white; border-radius: 50%;
-              border: 3px solid ${config.color}; box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+              border:${
+  userRole === "admin" && m.wheelLevel
+    ? (
+        m.wheelLevel === 2
+          ? "3px solid #DC2626"
+          : "3px solid #F59E0B"
+      )
+    : `3px solid ${config.color}`
+}; box-shadow: 0 3px 10px rgba(0,0,0,0.3);
               font-size: 18px; cursor: pointer;
             ">
               ${config.icon}
@@ -1464,10 +1969,9 @@ return (
               />
             )}
             
-            <div style={{ display: "flex", justifyContent: "between", alignItems: "center", marginTop: "8px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px" }}>
               <span style={{ fontSize: "10px", color: "#9CA3AF" }}>제보일: {m.date}</span>
               
-              {/* 🔒 [관리자 삭제 버튼] userRole이 admin일 때만 팝업 하단에 노출됩니다 */}
               {userRole === "admin" && (
                 <button
                   onClick={() => {
@@ -1476,19 +1980,9 @@ return (
                     }
                   }}
                   style={{
-                    marginLeft: "auto",
-                    background: "none",
-                    border: "none",
-                    color: "#EF4444",
-                    fontSize: "11px",
-                    fontWeight: "bold",
-                    cursor: "pointer",
-                    padding: "2px 6px",
-                    borderRadius: "4px",
-                    backgroundColor: "#FEF2F2"
+                    marginLeft: "auto", background: "none", border: "none", color: "#EF4444",
+                    fontSize: "11px", fontWeight: "bold", cursor: "pointer", padding: "2px 6px"
                   }}
-                  onMouseOver={(e) => e.target.style.backgroundColor = "#FEE2E2"}
-                  onMouseOut={(e) => e.target.style.backgroundColor = "#FEF2F2"}
                 >
                   🗑️ 삭제
                 </button>
@@ -1499,7 +1993,6 @@ return (
       </Marker>
     );
   })}
-
   {/* 🟢 실시간 애니메이션 경로선 및 자라나는 이펙트 레이어 */}
   {isRouteSearched && (
     <>
@@ -1581,334 +2074,292 @@ return (
           </div>
         </div>
       )}
+
      {/* 3. 주민 제보 화면 */}
+{/* 3. 주민 제보 화면 */}
 {currentView === "create" && (
- <div
-  style={{
-    height: "100vh",
-    display: "flex",
-    flexDirection: "column",
-    width: "100%",
-    maxWidth: "100%",
-    padding: isMobile ? "0" : "20px",
-    boxSizing: "border-box",
-  }}
->
+  <div
+    style={{
+      height: "100vh",
+      display: "flex",
+      flexDirection: "column",
+      width: "100%",
+      padding: isMobile ? "0" : "20px",
+      boxSizing: "border-box",
+    }}
+  >
     {renderHeader()}
 
-    <div
-      style={{
-        flex: 1,
-        display: "flex",
-        flexDirection: isMobile ? "column" : "row",
-      }}
-    >
+    <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row" }}>
       {/* 제보 패널 */}
+      <div style={{ width: isMobile ? "100%" : "320px", padding: "20px", background: "#f9f9f9", overflowY: "auto" }}>
+        
+<h3>✍️ 새로운 안전 요인 제보</h3>
+
+<div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+
+  <div style={{ display: "flex", gap: "8px" }}>
+
+  <div style={{ flex: 1, position: "relative" }}>
+
+    <input
+      type="text"
+      placeholder="주소 또는 장소 검색"
+      value={searchKeyword}
+      onChange={(e) => handleSearchKeywordChange(e.target.value)}
+      style={{
+        width: "100%",
+        padding: "10px",
+        border: "1px solid #ddd",
+        borderRadius: "8px"
+      }}
+    />
+
+    {searchSuggestions.length > 0 && (
       <div
         style={{
-          width: isMobile ? "100%" : "300px",
-          background: "#fff",
-          borderRight: isMobile ? "none" : "1px solid #eee",
-          borderBottom: isMobile ? "1px solid #eee" : "none",
-          padding: "12px",
-          boxSizing: "border-box",
+          position: "absolute",
+          top: "100%",
+          left: 0,
+          right: 0,
+          background: "white",
+          border: "1px solid #ddd",
+          borderRadius: "8px",
+          zIndex: 2000,
+          maxHeight: "200px",
+          overflowY: "auto"
         }}
       >
-        <h3
-          style={{
-            margin: "0 0 12px 0",
-            fontSize: "18px",
-            fontWeight: "700",
-          }}
-        >
-          ✍️ 장소 제보
-        </h3>
+        {searchSuggestions.map((item, idx) => (
+          <div
+            key={idx}
+            onClick={() => {
+              setSearchKeyword(item.name);
 
-       <div
-  style={{
-    display: "grid",
-    gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "1fr",
-    gap: "8px",
-  }}
->
+              mapRef.current.flyTo(
+                [item.lat, item.lng],
+                18,
+                { duration: 1.5 }
+              );
+
+              setSearchSuggestions([]);
+            }}
+            style={{
+              padding: "10px",
+              cursor: "pointer",
+              borderBottom: "1px solid #eee"
+            }}
+          >
+            {item.name}
+          </div>
+        ))}
+      </div>
+    )}
+
+  </div>
+
   <button
-    onClick={() => setSelectedType("stairs")}
+    onClick={handleSearchPlace}
     style={{
-      padding: "12px",
+      padding: "10px 14px",
       border: "none",
-      borderRadius: "12px",
-      cursor: "pointer",
-      fontWeight: "600",
-      background:
-        selectedType === "stairs"
-          ? "#FFECEC"
-          : "#F5F5F7",
-      color:
-        selectedType === "stairs"
-          ? "#D32F2F"
-          : "#333",
+      borderRadius: "8px",
+      background: "#10B981",
+      color: "white",
+      cursor: "pointer"
     }}
   >
-    🪜 {isMobile ? "" : "단차 / 계단"}
+    🔍
   </button>
 
   <button
-    onClick={() => setSelectedType("narrow")}
+    onClick={moveToMyLocation}
     style={{
-      padding: "12px",
+      padding: "10px 14px",
       border: "none",
-      borderRadius: "12px",
-      cursor: "pointer",
-      fontWeight: "600",
-      background:
-        selectedType === "narrow"
-          ? "#FFF8E1"
-          : "#F5F5F7",
-      color:
-        selectedType === "narrow"
-          ? "#F59E0B"
-          : "#333",
+      borderRadius: "8px",
+      background: "#2563EB",
+      color: "white",
+      cursor: "pointer"
     }}
   >
-    ↔️ {isMobile ? "" : "좁은 도로"}
-  </button>
-
-  <button
-    onClick={() => setSelectedType("obstacle")}
-    style={{
-      padding: "12px",
-      border: "none",
-      borderRadius: "12px",
-      cursor: "pointer",
-      fontWeight: "600",
-      background:
-        selectedType === "obstacle"
-          ? "#FEE2E2"
-          : "#F5F5F7",
-      color:
-        selectedType === "obstacle"
-          ? "#DC2626"
-          : "#333",
-    }}
-  >
-    🚧 {isMobile ? "" : "실시간 장애물"}
-  </button>
-
-  <button
-    onClick={() => setSelectedType("elevator")}
-    style={{
-      padding: "12px",
-      border: "none",
-      borderRadius: "12px",
-      cursor: "pointer",
-      fontWeight: "600",
-      background:
-        selectedType === "elevator"
-          ? "#DBEAFE"
-          : "#F5F5F7",
-      color:
-        selectedType === "elevator"
-          ? "#2563EB"
-          : "#333",
-    }}
-  >
-    🛗 {isMobile ? "" : "엘리베이터"}
-  </button>
-
-  <button
-    onClick={() => setSelectedType("slope")}
-    style={{
-      padding: "12px",
-      border: "none",
-      borderRadius: "12px",
-      cursor: "pointer",
-      fontWeight: "600",
-      background:
-        selectedType === "slope"
-          ? "#DCFCE7"
-          : "#F5F5F7",
-      color:
-        selectedType === "slope"
-          ? "#16A34A"
-          : "#333",
-    }}
-  >
-    📐 {isMobile ? "" : "경사도"}
-  </button>
-
-  <button
-    onClick={() => setSelectedType("sidewalk")}
-    style={{
-      padding: "12px",
-      border: "none",
-      borderRadius: "12px",
-      cursor: "pointer",
-      fontWeight: "600",
-      background:
-        selectedType === "sidewalk"
-          ? "#F3E8FF"
-          : "#F5F5F7",
-      color:
-        selectedType === "sidewalk"
-          ? "#8B5CF6"
-          : "#333",
-    }}
-  >
-    🧱 {isMobile ? "" : "보도블럭 파손"}
+    📍
   </button>
 </div>
-      </div>
 
-     {/* 3. 주민 제보 화면 중 지도 영역 시작 */}
-    <div
-      style={{
-        flex: 1,
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
-      {/* 📍 내 위치 버튼 
-          이제 이 버튼을 누르면 상단의 moveToMyLocation이 작동하여 주민 제보 지도도 움직입니다. */}
-      <button
-        onClick={moveToMyLocation}
-        style={{
-          position: "absolute",
-          right: "20px",
-          bottom: "20px",
-          zIndex: 99999, // 중요: 지도 레이어 위에 고정
-          pointerEvents: "auto",
-          width: "52px",
-          height: "52px",
-          borderRadius: "14px",
-          border: "none",
-          background: "#fff",
-          boxShadow: "0 4px 15px rgba(0,0,0,0.25)",
+
+
+ <p style={{ fontSize: "12px", color: "#666" }}>
+  📍 지도에서 제보할 위치를 클릭하세요.
+</p>
+
+</div>
+
+        {/* 관리자 승인 대기 목록 */}
+{userRole === "admin" && (
+  <div style={{ marginTop: "20px" }}>
+    <h4>🚨 승인 대기 목록</h4>
+    
+    {/* 목록을 감싸는 div에 고정 높이와 스크롤 설정 */}
+    <div style={{ 
+      maxHeight: "200px", 
+      overflowY: "auto", 
+      border: "1px solid #ddd", 
+      padding: "5px", 
+      background: "#f9f9f9",
+      borderRadius: "8px"
+    }}>
+      {bfMarkers.filter(m => m.status === 'pending').map(m => (
+        <div key={m.id} style={{ 
+          border: "1px solid #ddd", 
+          padding: "8px", 
+          marginBottom: "5px", 
+          background: "white", 
+          borderRadius: "4px",
           display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: "24px",
-          cursor: "pointer",
-        }}
-      >
-        📍
-      </button>
+          justifyContent: "space-between",
+          alignItems: "center"
+        }}>
+          <span style={{ fontSize: "14px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {m.desc || "내용 없음"}
+          </span>
+          <button
+  onClick={() =>
+    setBfMarkers(prev =>
+      prev.map(item =>
+        item.id === m.id
+          ? {
+              ...item,
+              status: "approved",
+              wheelLevel: 1
+            }
+          : item
+      )
+    )
+  }
+>
+  🟡 1단계 승인
+</button>
 
-      <MapContainer
-        center={[37.6345, 126.832]}
-        zoom={16}
-        style={{
-          width: "100%",
-          height: "100%", // 부모 .relative 박스를 가득 채우도록 고정
-        }}
-        // 💡 핵심 수정: ref={mapRef}를 직접 지정하여 주민 제보 화면이 켜질 때 
-        // 잃어버렸던 mapRef.current 지도 객체를 확실하게 다시 잡아줍니다!
-        ref={mapRef} 
-      >
-        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+<button
+ onClick={() => {
 
-        {/* 🔵 현재 내 위치 마커 (L.divIcon 구조로 터치 버그 방지) */}
-        {userLocation && (
-          <Marker
-            position={userLocation}
-            icon={L.divIcon({
-              html: `
-                <div style="
-                  width:22px;
-                  height:22px;
-                  background:#2563EB;
-                  border:4px solid white;
-                  border-radius:50%;
-                  box-shadow:0 0 12px rgba(37,99,235,0.5);
-                "></div>
-              `,
-              className: "custom-user-location",
-              iconSize: [22, 22],
-              iconAnchor: [11, 11],
-            })}
-          >
-            <Popup>📍 현재 내 위치</Popup>
-          </Marker>
-        )}
+  console.log("2단계 승인:", m.id);
 
-        {/* 지도 클릭 제보 컴포넌트 */}
-        <AddMarker
-          setMarkers={setMarkers}
-          selectedType={selectedType}
-        />
+  setBfMarkers(prev =>
+    prev.map(item =>
+      item.id === m.id
+        ? {
+            ...item,
+            status: "approved",
+            wheelLevel: 2
+          }
+        : item
+    )
+  );
 
-        {/* 📌 사용자가 등록한 마커 */}
-        {markers && markers.map((m) => (
-          <Marker
-            key={m.id}
-            position={[m.lat, m.lng]}
-            icon={getIcon(m.type)}
-          >
-            <Popup>
-              <div style={{ textAlign: "center", fontFamily: "sans-serif" }}>
-                <b>{getLabel(m.type)}</b>
-                <br />
-                <button
-                  onClick={() =>
-                    setMarkers((prev) =>
-                      prev.filter((item) => item.id !== m.id)
-                    )
-                  }
-                  style={{
-                    marginTop: "8px",
-                    background: "#ff4d4d",
-                    color: "#fff",
-                    border: "none",
-                    padding: "6px 10px",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                  }}
-                >
-                  삭제
-                </button>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-
-        {/* 🔄 안전길찾기에서 가져온 마커 */}
-        {bfMarkers && bfMarkers.map((m) => {
-          const config = bfConfig[m.type] || {
-            color: "#6B7280",
-            icon: "📍",
-            label: "기타",
-          };
-
-          return (
-            <Marker
-              key={m.id}
-              position={[m.lat, m.lng]}
-              icon={L.divIcon({
-                html: `
-                  <div style="
-                    width:34px;
-                    height:34px;
-                    background:white;
-                    border-radius:50%;
-                    border:3px solid ${config.color};
-                    display:flex;
-                    align-items:center;
-                    justify-content:center;
-                    box-shadow: 0 3px 8px rgba(0,0,0,0.25);
-                  ">
-                    ${config.icon}
-                  </div>
-                `,
-                className: "custom-bf-shared-marker",
-                iconSize: [34, 34],
-                iconAnchor: [17, 17],
-              })}
-            />
-          );
-        })}
-      </MapContainer>
+}}
+>
+  🔴 2단계 승인
+</button>
+        </div>
+      ))}
     </div>
   </div>
-</div>
+)}
+      </div>
+
+      {/* 지도 영역 */}
+      <div style={{ flex: 1, position: "relative" }}>
+        
+
+        <MapContainer center={[37.6345, 126.832]} zoom={16} style={{ width: "100%", height: "100%" }} ref={mapRef}>
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+
+          {/* 제보 입력을 위한 클릭 이벤트 컴포넌트 */}
+          {/* App.jsx 의 return 안에서 AddMarker 호출하는 부분을 이렇게 바꾸세요 */}
+<AddMarker 
+  setBfMarkers={setBfMarkers}
+  selectedType={newMarkerType}
+  setSelectedType={setNewMarkerType}
+  bfConfig={bfConfig} 
+  setTempMarker={setTempMarker}
+  tempMarker={tempMarker}
+  desc={newMarkerDesc} 
+  setDesc={setNewMarkerDesc}
+  image={newMarkerImage}
+  setImage={setNewMarkerImage}
+  isAdminLoggedIn={isAdminLoggedIn} 
+   wheelLevel={wheelLevel}
+  setWheelLevel={setWheelLevel}
+  
+/>
+
+          {/* 📌 모든 데이터 통합 렌더링 (공식 + 주민제보) */}
+          {bfMarkers.map((m) => {
+
+            const config = bfConfig[m.type] || { color: "#6B7280", icon: "📍", label: "기타" };
+            const isApproved = m.status === "approved";
+
+            return (
+              <Marker
+                key={m.id}
+                position={[m.lat, m.lng]}
+                icon={divIcon({
+                  html: `
+                    <div style="
+                      width:34px; height:34px; background:white; border-radius:50%;
+                      border:${
+  userRole === "admin" && m.wheelLevel
+    ? (m.wheelLevel === 2
+        ? "3px solid #DC2626"
+        : "3px solid #F59E0B")
+    : (isApproved
+        ? `3px solid ${config.color}`
+        : "3px solid #999")
+};
+                      display:flex; align-items:center; justify-content:center;
+                      box-shadow: 0 3px 8px rgba(0,0,0,0.25); font-size:18px;
+                      ${!isApproved ? "border-style: dashed;" : ""}
+                    ">
+                      ${config.icon}
+                    </div>
+                  `,
+                  className: "custom-marker",
+                  iconSize: [34, 34],
+                  iconAnchor: [17, 17],
+                })}
+              >
+                <Popup>
+                  <div style={{ textAlign: "center" }}>
+                    <b>{isApproved ? config.label : "주민 제보(대기중)"}</b>
+                    <p>{m.desc}</p>
+                    {m.image && <img src={m.image} style={{ width: "100px", borderRadius: "5px" }} />}
+                    <br />
+                    {m.status === "pending" && (
+                      
+  <button
+    onClick={() =>
+      setBfMarkers(prev =>
+        prev.filter(item => item.id !== m.id)
+      )
+    }
+    style={{ marginTop: "8px" }}
+  >
+    삭제하기
+  </button>
+  
+)}
+
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
+        </MapContainer>
+      </div>
+    </div>
+  </div>
 )}
 
       {/* 4. 산책 코스 화면 */}
@@ -1937,6 +2388,100 @@ return (
         </div>
       )}
     </div>
+  );
+}
+
+function AddMarker({
+  setBfMarkers,
+  selectedType,
+   setSelectedType,
+  bfConfig,
+  setTempMarker,
+  tempMarker,
+  desc,
+  setDesc,
+  image,
+  setImage,
+  isAdminLoggedIn,
+  wheelLevel,
+  setWheelLevel,
+})
+ {
+  useMapEvents({
+  click(e) {
+
+    setTempMarker({
+      lat: e.latlng.lat,
+      lng: e.latlng.lng
+    });
+
+  }
+});
+console.log("현재 wheelLevel:", wheelLevel);
+  if (!tempMarker) return null;
+
+  return (
+    <Marker position={[tempMarker.lat, tempMarker.lng]}>
+      <Popup onClose={() => setTempMarker(null)}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "180px" }}>
+          {/* 여기서도 props로 받은 isAdminLoggedIn을 사용하세요 */}
+          <h4>{isAdminLoggedIn ? "공식 요인 등록" : "새로운 제보 등록"}</h4>
+          <select
+  value={selectedType}
+  onChange={(e) => setSelectedType(e.target.value)}
+  style={{
+    padding: "6px",
+    borderRadius: "6px",
+    border: "1px solid #ccc"
+  }}
+>
+  {Object.keys(bfConfig).map((key) => (
+    <option key={key} value={key}>
+      {bfConfig[key].label}
+    </option>
+  ))}
+</select>
+          <textarea 
+            placeholder="상세 설명을 입력하세요..." 
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)} 
+            style={{ height: "60px" }}
+          />
+          <input type="file" accept="image/*" onChange={(e) => {
+            const reader = new FileReader();
+            reader.onloadend = () => setImage(reader.result);
+            reader.readAsDataURL(e.target.files[0]);
+          }} />
+          
+          <button onClick={() => {
+             console.log("등록 직전 wheelLevel:", wheelLevel);
+
+            if (!desc) return alert("설명을 입력해주세요!");
+            
+            // 💡 여기서도 props로 받은 isAdminLoggedIn을 사용합니다
+            setBfMarkers(prev => [...prev, {
+  id: `bf-${Date.now()}`,
+  lat: tempMarker.lat,
+  lng: tempMarker.lng,
+  type: selectedType,
+  desc,
+  image,
+  date: new Date().toLocaleDateString(),
+  status: isAdminLoggedIn ? "approved" : "pending",
+  isOfficial: isAdminLoggedIn,
+ wheelLevel: isAdminLoggedIn ? wheelLevel : null
+}]);
+            
+            setTempMarker(null);
+            setDesc("");
+            setImage(null);
+            alert(isAdminLoggedIn ? "공식 아이콘이 등록되었습니다." : "제보 완료! 관리자 승인을 기다려주세요.");
+          }}>
+            {isAdminLoggedIn ? "등록하기" : "제보하기"}
+          </button>
+        </div>
+      </Popup>
+    </Marker>
   );
 }
 
