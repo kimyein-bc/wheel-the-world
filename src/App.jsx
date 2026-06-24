@@ -31,73 +31,174 @@ async function getCoords(place) {
     lng: Number(data[0].lon),
   };
 }
-async function getRoute(start, end, mode, bfMarkers) {
-console.log("현재 모드:", mode);
-console.log("전체 마커:", bfMarkers);
+function getDistance(a, b) {
+  const R = 6371000;
 
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+
+  const aa =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.lat * Math.PI / 180) *
+      Math.cos(b.lat * Math.PI / 180) *
+      Math.sin(dLng / 2) ** 2;
+
+  return (
+    2 *
+    R *
+    Math.atan2(
+      Math.sqrt(aa),
+      Math.sqrt(1 - aa)
+    )
+  );
+}
+async function getRoute(start, end, mode, bfMarkers) {
+  console.log("현재 모드:", mode);
+  console.log("전체 마커:", bfMarkers);
+
+  // -----------------------
+  // 거리 계산 함수 (m)
+  // -----------------------
+  function getDistance(a, b) {
+    const R = 6371000;
+
+    const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+    const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+
+    const aa =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((a.lat * Math.PI) / 180) *
+      Math.cos((b.lat * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1 - aa));
+
+    return R * c;
+  }
+
+  // -----------------------
+  // 1. 기본 경로 요청
+  // -----------------------
+  const apiKey = "여기에_ORS_API_KEY";
+
+  const baseUrl =
+    `https://api.openrouteservice.org/v2/directions/foot-walking` +
+    `?api_key=${apiKey}` +
+    `&start=${start[1]},${start[0]}` +
+    `&end=${end[1]},${end[0]}`;
+
+  const baseRes = await fetch(baseUrl);
+  const baseData = await baseRes.json();
+
+  console.log("ORS 최종 응답:", baseData);
+
+  if (
+    !baseData.features ||
+    !baseData.features[0]
+  ) {
+    console.error("경로 생성 실패");
+    return [];
+  }
+
+  const baseRoute =
+    baseData.features[0].geometry.coordinates.map(
+      ([lng, lat]) => [lat, lng]
+    );
+
+  // -----------------------
+  // 2. 회피 대상 선정
+  // -----------------------
   let blockedMarkers = [];
 
   if (mode === "wheel1") {
     blockedMarkers = bfMarkers.filter(
-      m => m.wheelLevel === 1 || m.wheelLevel === 2
+      m => Number(m.wheelLevel) >= 1
     );
   }
 
   if (mode === "wheel2") {
     blockedMarkers = bfMarkers.filter(
-      m => m.wheelLevel === 2
+      m => Number(m.wheelLevel) >= 2
     );
   }
 
   console.log("회피 대상:", blockedMarkers);
-  
 
-  
+  // -----------------------
+  // 3. 경로 위 장애물 찾기
+  // -----------------------
   const obstacleOnRoute = blockedMarkers.find(marker =>
-  baseRoute.some(point => {
+    baseRoute.some(([lat, lng]) => {
+      const distance = getDistance(
+        { lat, lng },
+        {
+          lat: marker.lat,
+          lng: marker.lng
+        }
+      );
 
-    const distance = Math.sqrt(
-      Math.pow(point[0] - marker.lat, 2) +
-      Math.pow(point[1] - marker.lng, 2)
+      return distance < 10; // 10m 이내
+    })
+  );
+
+  console.log("경로 위 장애물:", obstacleOnRoute);
+
+  // -----------------------
+  // 장애물 없으면 기본 경로 반환
+  // -----------------------
+  if (!obstacleOnRoute) {
+    console.log("회피할 장애물 없음");
+    return baseRoute;
+  }
+
+  // -----------------------
+  // 4. 우회 지점 생성
+  // -----------------------
+  const waypoint = {
+    lat: obstacleOnRoute.lat + 0.0002,
+    lng: obstacleOnRoute.lng + 0.0002
+  };
+
+  console.log("우회 지점:", waypoint);
+
+  // -----------------------
+  // 5. 출발 -> 우회지점
+  // -----------------------
+  const url1 =
+    `https://api.openrouteservice.org/v2/directions/foot-walking` +
+    `?api_key=${apiKey}` +
+    `&start=${start[1]},${start[0]}` +
+    `&end=${waypoint.lng},${waypoint.lat}`;
+
+  const res1 = await fetch(url1);
+  const data1 = await res1.json();
+
+  // -----------------------
+  // 6. 우회지점 -> 도착
+  // -----------------------
+  const url2 =
+    `https://api.openrouteservice.org/v2/directions/foot-walking` +
+    `?api_key=${apiKey}` +
+    `&start=${waypoint.lng},${waypoint.lat}` +
+    `&end=${end[1]},${end[0]}`;
+
+  const res2 = await fetch(url2);
+  const data2 = await res2.json();
+
+  const route1 =
+    data1.features[0].geometry.coordinates.map(
+      ([lng, lat]) => [lat, lng]
     );
 
-    return distance < 0.0003;
-  })
-);
+  const route2 =
+    data2.features[0].geometry.coordinates.map(
+      ([lng, lat]) => [lat, lng]
+    );
 
-console.log("경로 위 장애물:", obstacleOnRoute);
-if (!obstacleOnRoute) {
-  console.log("회피할 장애물 없음");
-  return baseRoute;
-}
-const obstacle = obstacleOnRoute;
+  console.log("회피 경로 생성 완료");
 
-console.log("선택된 장애물:", obstacle);
-
-const waypoint = {
-  lat: obstacle.lat + 0.0005,
-  lng: obstacle.lng + 0.0005
-};
-
-
-
-const res1 = await fetch(url1);
-const data1 = await res1.json();
-
-const res2 = await fetch(url2);
-const data2 = await res2.json();
-
-const route1 =
-  data1.routes[0].geometry.coordinates.map(
-    coord => [coord[1], coord[0]]
-  );
-
-const route2 =
-  data2.routes[0].geometry.coordinates.map(
-    coord => [coord[1], coord[0]]
-  );
-
-return [...route1, ...route2];
+  return [...route1, ...route2];
 }
 // 기본 마커 아이콘 문제 해결
 delete L.Icon.Default.prototype._getIconUrl;
@@ -900,30 +1001,74 @@ const animateWheelTrack = (fullRoute) => {
 };
 
 const ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjZiMjY1Y2E5NjZjODQxZmE5MjJjNDEzM2IyYWNhN2U2IiwiaCI6Im11cm11cjY0In0=";
+const getObstacles = (mode, bfMarkers) => {
+  // 일반 모드거나 마커가 없으면 빈 값 반환 (회피 안 함)
+  if (mode === "normal" || !bfMarkers || bfMarkers.length === 0) {
+    return null;
+  }
 
-const getRoute = async (start, end) => {
+  let targetMarkers = [];
+
+  // 모드에 따라 피해야 할 마커 필터링
+  if (mode === "wheel1") {
+    // wheel1: 레벨 1과 2 모두 피함
+    targetMarkers = bfMarkers.filter(m => (m.wheelLevel ?? 1) === 1 || (m.wheelLevel ?? 1) === 2);
+  } else if (mode === "wheel2") {
+    // wheel2: 레벨 2만 피함
+    targetMarkers = bfMarkers.filter(m => (m.wheelLevel ?? 1) === 2);
+  }
+
+  // 피할 마커가 없으면 빈 값 반환
+  if (targetMarkers.length === 0) return null;
+
+  // 마커를 사각형(Polygon) 구역으로 변환
+  const polygons = targetMarkers.map(marker => {
+    const buffer = 0.0001// 약 30m 반경의 회피 구역 (너무 좁으면 0.0005로 늘리세요)
+    return [[
+      [marker.lng - buffer, marker.lat - buffer],
+      [marker.lng + buffer, marker.lat - buffer],
+      [marker.lng + buffer, marker.lat + buffer],
+      [marker.lng - buffer, marker.lat + buffer],
+      [marker.lng - buffer, marker.lat - buffer]
+    ]];
+  });
+
+  console.log(`[디버그] ${mode} 모드 - 회피 구역 생성 개수:`, polygons.length);
+
+  return { type: "MultiPolygon", coordinates: polygons };
+};
+const getRoute = async (start, end, mode = "normal", bfMarkers = []) => {
   try {
-    // 1. URL이 api.heigit.org로 되어 있는지 확인하세요!
-    const url =
-  "https://api.openrouteservice.org/v2/directions/wheelchair/geojson";
+    // 1. 회피해야 할 장애물 구역 가져오기
+    const avoidOptions = getObstacles(mode, bfMarkers);
+
+    // 2. API에 보낼 기본 데이터 세팅
+    const bodyData = {
+      coordinates: [
+        [start.lng, start.lat],
+        [end.lng, end.lat],
+      ]
+    };
+
+    // 3. 피해야 할 구역이 존재한다면 options 객체 추가 
+    if (avoidOptions) {
+      bodyData.options = {
+        avoid_polygons: avoidOptions
+      };
+    }
+
+    const url = "https://api.openrouteservice.org/v2/directions/wheelchair/geojson";
     
     const res = await fetch(url, {
       method: "POST",
       headers: {
-  Authorization: ORS_API_KEY,
-  "Content-Type": "application/json",
-},
-      body: JSON.stringify({
-        coordinates: [
-          [start.lng, start.lat], // [경도, 위도] 순서 중요!
-          [end.lng, end.lat],
-        ],
-      }),
+        Authorization: ORS_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(bodyData), // 회피 옵션이 포함된 데이터 전송
     });
 
     const data = await res.json();
-    
-    // 2. 응답 데이터 확인 (무슨 에러가 나는지 콘솔에서 확인)
     console.log("ORS 최종 응답:", data);
 
     if (data.error) {
@@ -931,13 +1076,18 @@ const getRoute = async (start, end) => {
       return [];
     }
 
-    // 3. 좌표 추출 (ORS 응답 구조에 맞춤)
     if (!data.features || data.features.length === 0) return [];
     
-    return data.features[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+    // 4. 경로 좌표 추출 및 반환
+    const routeCoords = data.features[0].geometry.coordinates.map(
+      ([lng, lat]) => [lat, lng] // 지도에 그리기 위해 [위도, 경도]로 변환
+    );
+
+    return routeCoords;
 
   } catch (err) {
     console.error("getRoute 오류:", err);
+    console.error(err.stack);
     return [];
   }
 };
@@ -1054,6 +1204,16 @@ console.log("도착 마커:", [
   routeMode,
   bfMarkers
 );
+console.log(
+  "wheelLevel",
+  bfMarkers[0].wheelLevel
+);
+console.log("첫번째 마커", bfMarkers[0]);
+console.log(
+  "마지막 마커 wheelLevel",
+  bfMarkers[bfMarkers.length - 1]?.wheelLevel
+);
+console.log("bfMarkers:", bfMarkers);
     console.log("생성된 route 선 데이터:", route);
 
     if (!route || route.length === 0) {
@@ -1096,7 +1256,7 @@ console.log("도착 마커:", [
     alert("삐빅! 경로 생성 중 오류 발생!");
   }
 };
-// 💡 이미지 첨부 시 호출되는 Base64 인코더
+
 // 💡 이미지 첨부 시 호출되는 Base64 인코더
 const handleBfImageChange = (e) => {
   const file = e.target.files[0];
