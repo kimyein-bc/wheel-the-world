@@ -936,6 +936,7 @@ const fetchAutoComplete = async (keyword, setSuggestions) => {
   }
 };
 const [routeSteps, setRouteSteps] = useState([]);
+const [routeInfo, setRouteInfo] = useState(null);
 const [routeMode, setRouteMode] = useState("normal");
 const [wheelLevel, setWheelLevel] = useState(1);
 const [routeGuide, setRouteGuide] = useState([]);         
@@ -1073,8 +1074,12 @@ const getRoute = async (start, end, mode = "normal", bfMarkers = []) => {
 
     if (data.error) {
       console.error("API 에러 상세:", data.error);
-      return [];
-    }
+      return {
+    routeCoords: [],
+    distance: 0,
+    duration: 0
+  };
+}
 
     if (!data.features || data.features.length === 0) return [];
     
@@ -1083,7 +1088,14 @@ const getRoute = async (start, end, mode = "normal", bfMarkers = []) => {
       ([lng, lat]) => [lat, lng] // 지도에 그리기 위해 [위도, 경도]로 변환
     );
 
-    return routeCoords;
+    const summary =
+  data.features[0].properties.summary;
+
+return {
+  routeCoords,
+  distance: (summary.distance / 1000).toFixed(1),
+  duration: Math.round(summary.duration / 60)
+};
 
   } catch (err) {
     console.error("getRoute 오류:", err);
@@ -1198,12 +1210,17 @@ console.log("도착 마커:", [
     setEndMarkerPos([endPos.lat, endPos.lng]);
 
     // 🔥 2. 경로 생성 (getRoute 함수가 {lat, lng} 객체를 정상적으로 받도록 전달)
-    const route = await getRoute(
+    const result = await getRoute(
   startPos,
   endPos,
   routeMode,
   bfMarkers
 );
+const route = result.routeCoords;
+setRouteInfo({
+  distance: result.distance,
+  duration: result.duration
+});
 console.log(
   "wheelLevel",
   bfMarkers[0].wheelLevel
@@ -1947,9 +1964,7 @@ return (
                 </button>
               </form>
 
-             <div style={{ flex: 1, padding: "20px", color: "#94a3b8", fontSize: "13px", textAlign: "center" }}>
-  안전 경로 탐색을 원하시면 출발지와 목적지를 입력해 주세요.
-</div>
+            
             </div>
 
             {/* 오른쪽 지도 영역 */}
@@ -1959,7 +1974,37 @@ return (
               height: isMobile ? "calc(100vh - 250px)" : "100%" 
             }}>
               
-              
+              {routeInfo && (
+  <div
+    style={{
+      position: "absolute",
+      top: "12px",
+      left: "50%",
+      transform: "translateX(-50%)",
+
+      zIndex: 1000,
+
+      background: "rgba(255,255,255,0.95)",
+
+      backdropFilter: "blur(8px)",
+
+      padding: "8px 16px",
+
+      borderRadius: "999px",
+
+      boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+
+      display: "flex",
+      gap: "18px",
+
+      fontWeight: "600",
+      fontSize: "14px"
+    }}
+  >
+    <span>📏 {routeInfo.distance}km</span>
+    <span>⏱ {routeInfo.duration}분</span>
+  </div>
+)}
               <MapContainer
   // 🌟 경로 탐색 시 자식 요소들이 확실히 새로 고쳐지도록 데이터 기반 key 적용
   center={[37.6345, 126.832]}
