@@ -11,7 +11,14 @@ import {
   Polyline,
   useMap,
 } from "react-leaflet";
-import { ref, set, push, onValue } from "firebase/database";
+import {
+  ref,
+  set,
+  push,
+  onValue,
+  update,
+  remove
+} from "firebase/database";
 
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -1340,15 +1347,11 @@ const pendingMarkers = bfMarkers.filter(m => m.status === 'pending');
 
 // 승인 함수
 
-const approveMarker = (id) => {
-
-  setBfMarkers(prev => prev.map(m => 
-
-    m.id === id ? { ...m, status: 'approved' } : m
-
-  ));
-
-}; 
+const approveMarker = async (id) => {
+  await update(ref(db, `bfMarkers/${id}`), {
+    status: "approved"
+  });
+};
 
 // 💡 새 마커 최종 등록 함수 (관리자 전용)
 const handleAddBfMarker = async () => {
@@ -2202,17 +2205,29 @@ return (
               <span style={{ fontSize: "10px", color: "#9CA3AF" }}>제보일: {m.date}</span>
               
               {userRole === "admin" && (
-                <button
-                  onClick={() => {
-                    if (window.confirm("이 안전 요인 아이콘을 정말 삭제하시겠습니까?")) {
-                      setBfMarkers((prev) => prev.filter((item) => item.id !== m.id));
-                    }
-                  }}
-                  style={{
-                    marginLeft: "auto", background: "none", border: "none", color: "#EF4444",
-                    fontSize: "11px", fontWeight: "bold", cursor: "pointer", padding: "2px 6px"
-                  }}
-                >
+  <button
+    onClick={async () => {
+      if (
+        window.confirm(
+          "이 안전 요인 아이콘을 정말 삭제하시겠습니까?"
+        )
+      ) {
+        await remove(
+          ref(db, `bfMarkers/${m.id}`)
+        );
+      }
+    }}
+    style={{
+      marginLeft: "auto",
+      background: "none",
+      border: "none",
+      color: "#EF4444",
+      fontSize: "11px",
+      fontWeight: "bold",
+      cursor: "pointer",
+      padding: "2px 6px"
+    }}
+  >
                   🗑️ 삭제
                 </button>
               )}
@@ -2453,39 +2468,25 @@ return (
             {m.desc || "내용 없음"}
           </span>
           <button
-  onClick={() =>
-    setBfMarkers(prev =>
-      prev.map(item =>
-        item.id === m.id
-          ? {
-              ...item,
-              status: "approved",
-              wheelLevel: 1
-            }
-          : item
-      )
-    )
-  }
+  onClick={async () => {
+  await update(ref(db, `bfMarkers/${m.id}`), {
+    status: "approved",
+    wheelLevel: 1
+  });
+}}
 >
   🟡 1단계 승인
 </button>
 
 <button
- onClick={() => {
+ onClick={async () => {
 
   console.log("2단계 승인:", m.id);
 
-  setBfMarkers(prev =>
-    prev.map(item =>
-      item.id === m.id
-        ? {
-            ...item,
-            status: "approved",
-            wheelLevel: 2
-          }
-        : item
-    )
-  );
+  await update(ref(db, `bfMarkers/${m.id}`), {
+    status: "approved",
+    wheelLevel: 2
+  });
 
 }}
 >
