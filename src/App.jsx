@@ -673,7 +673,6 @@ const [userRole, setUserRole] = useState("user"); // 'admin' 또는 'user' (테�
 // 무장애/위험 요소 마커들을 저장할 배열 상태 (기존 markers 배열이 있다면 합치거나 대체 가능)
 // 💡 App 컴포넌트 내부 최상단 상태 정의 구역 수정
 
-// [수정] 처음 앱이 켜질 때 localStorage에 저장된 데이터가 있다면 가져오고, 없으면 기본 샘플을 넣습니다.
 const [bfMarkers, setBfMarkers] = useState([]);
 
 useEffect(() => {
@@ -971,6 +970,7 @@ const [isFollowingUser, setIsFollowingUser] = useState(false);
 const [isAdmin, setIsAdmin] = useState(false);
 const [isCreatingCourse, setIsCreatingCourse] = useState(false);
 const [coursePoints, setCoursePoints] = useState([]);
+const [savedCourses, setSavedCourses] = useState([]);
 const saveWalkCourse = async () => {
   if (coursePoints.length < 2) {
     alert("코스를 2개 이상 찍어주세요.");
@@ -981,10 +981,17 @@ const saveWalkCourse = async () => {
     const courseId = Date.now();
 
     await set(ref(db, `walkCourses/${courseId}`), {
-      title: "새 산책코스",
-      route: coursePoints,
-      createdAt: Date.now()
-    });
+  title:
+    selectedCourse === "centralPark"
+      ? "화정 중앙공원 순환 코스"
+      : "덕양구청 ➔ 도서관 산책로",
+
+  courseType: selectedCourse,
+
+  route: coursePoints,
+
+  createdAt: Date.now()
+});
 
     alert("산책코스 저장 완료!");
 
@@ -997,6 +1004,27 @@ const saveWalkCourse = async () => {
     alert("저장 실패!");
   }
 };
+useEffect(() => {
+  const coursesRef = ref(db, "walkCourses");
+
+  const unsubscribe = onValue(coursesRef, (snapshot) => {
+    const data = snapshot.val();
+
+    if (!data) {
+      setSavedCourses([]);
+      return;
+    }
+
+    const courses = Object.entries(data).map(([id, value]) => ({
+      id,
+      ...value
+    }));
+
+    setSavedCourses(courses);
+  });
+
+  return () => unsubscribe();
+}, []);
     
 // ✨ 한글 선택지로도 바로 위도/경도를 매칭할 수 있도록 키값을 확장했습니다!
 const locationPoints = {
@@ -2750,6 +2778,16 @@ return (
               }}
             />
           )}
+          {savedCourses.map((course) => (
+  <Polyline
+    key={course.id}
+    positions={course.route}
+    pathOptions={{
+      color: "#2563EB",
+      weight: 5
+    }}
+  />
+))}
         </MapContainer>
       </div>
     </div>
