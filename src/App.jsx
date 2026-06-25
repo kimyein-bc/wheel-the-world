@@ -981,27 +981,22 @@ const saveWalkCourse = async () => {
     const courseId = Date.now();
 
     await set(ref(db, `walkCourses/${courseId}`), {
-  title:
-    selectedCourse === "centralPark"
-      ? "화정 중앙공원 순환 코스"
-      : "덕양구청 ➔ 도서관 산책로",
+      title: "새 산책코스",
 
-  courseType: selectedCourse,
+      courseType: selectedCourse, // 추가
 
-  route: coursePoints,
+      route: coursePoints,
 
-  createdAt: Date.now()
-});
+      createdAt: Date.now()
+    });
 
     alert("산책코스 저장 완료!");
 
-    // 저장 성공 후에만 초기화
     setCoursePoints([]);
     setIsCreatingCourse(false);
 
   } catch (error) {
-    console.error("저장 실패:", error);
-    alert("저장 실패!");
+    console.error(error);
   }
 };
 useEffect(() => {
@@ -2778,15 +2773,17 @@ return (
               }}
             />
           )}
-          {savedCourses.map((course) => (
-  <Polyline
-    key={course.id}
-    positions={course.route}
-    pathOptions={{
-      color: "#2563EB",
-      weight: 5
-    }}
-  />
+          {savedCourses
+  .filter(course => course.courseType === selectedCourse)
+  .map((course) => (
+    <Polyline
+      key={course.id}
+      positions={course.route}
+      pathOptions={{
+        color: "#2563EB",
+        weight: 5
+      }}
+    />
 ))}
         </MapContainer>
       </div>
