@@ -11,7 +11,7 @@ import {
   Polyline,
   useMap,
 } from "react-leaflet";
-import { ref, set } from "firebase/database";
+import { ref, set, push, onValue } from "firebase/database";
 
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -667,52 +667,44 @@ const [userRole, setUserRole] = useState("user"); // 'admin' 또는 'user' (테�
 // 💡 App 컴포넌트 내부 최상단 상태 정의 구역 수정
 
 // [수정] 처음 앱이 켜질 때 localStorage에 저장된 데이터가 있다면 가져오고, 없으면 기본 샘플을 넣습니다.
-const [bfMarkers, setBfMarkers] = useState(() => {
-  const savedMarkers = localStorage.getItem("wheel_bf_markers");
-  if (savedMarkers) {
-    try {
-      const parsed = JSON.parse(savedMarkers);
+const [bfMarkers, setBfMarkers] = useState([]);
 
-      // 기존 데이터는 승인된 것으로 간주
-      return parsed.map(m => ({ ...m, status: m.status || "approved" }));
-    } catch (e) { console.error(e); }
-  }
-  // 기본 데이터 구조 (기존 샘플 유지)
-  return [
-    {
-      id: "sample-1",
-      lat: 37.6355,
-      lng: 126.8325,
-      type: "step",
-      desc: "화정역 2번 출구 앞 보도블록 단차 약 7cm 있습니다. 수동 휠체어 진입 시 주의하세요.",
-      image: null,
-      date: "2026. 06. 01."
-    }
-  ];
-});
 useEffect(() => {
-  localStorage.setItem("wheel_bf_markers", JSON.stringify(bfMarkers));
-}, [bfMarkers]);
+  const markersRef = ref(db, "bfMarkers");
+
+  const unsubscribe = onValue(markersRef, (snapshot) => {
+    const data = snapshot.val();
+
+    if (!data) {
+      setBfMarkers([]);
+      return;
+    }
+
+    const markers = Object.entries(data).map(([id, value]) => ({
+      id,
+      ...value
+    }));
+
+    setBfMarkers(markers);
+  });
+
+  return () => unsubscribe();
+}, []);
 
 // App.js 내에 배치
-const addOfficialMarker = (newMarker) => {
-  // 1. 새 마커 데이터 생성
-  const markerToAdd = { 
-    ...newMarker, 
-    id: `marker-${Date.now()}`, // ID를 확실하게 생성
-    isOfficial: true, 
-    status: 'approved',
+const addOfficialMarker = async (newMarker) => {
+  const markerToAdd = {
+    ...newMarker,
+    isOfficial: true,
+    status: "approved",
     date: new Date().toLocaleDateString()
   };
 
-  // 2. 중요: prev(이전 상태)를 펼쳐서 새 배열을 만드는 것을 명시
-  setBfMarkers(prev => {
-    const updatedMarkers = [...prev, markerToAdd];
-    console.log("업데이트된 전체 마커:", updatedMarkers); // 콘솔에 찍히는지 확인
-    return updatedMarkers;
-  });
+  await push(
+    ref(db, "bfMarkers"),
+    markerToAdd
+  );
 
-  // 3. 폼 상태 초기화
   setTempMarker(null);
   setNewMarkerDesc("");
   setNewMarkerImage(null);
@@ -1359,57 +1351,35 @@ const approveMarker = (id) => {
 }; 
 
 // 💡 새 마커 최종 등록 함수 (관리자 전용)
-const handleAddBfMarker = () => {
-
+const handleAddBfMarker = async () => {
   if (!isAdminLoggedIn) {
-
     alert("권한이 없습니다. 관리자 로그인 후 이용해주세요.");
-
     return;
-
   }
 
   if (!newMarkerDesc.trim()) {
-
     alert("상세 설명을 입력해주세요!");
-
     return;
-
   }
 
+  const newBfData = {
+    lat: tempMarker.lat,
+    lng: tempMarker.lng,
+    type: newMarkerType,
+    desc: newMarkerDesc,
+    image: newMarkerImage,
+    date: new Date().toLocaleDateString(),
+    wheelLevel,
+    status: "approved",
+    isOfficial: true,
+  };
 
-const newBfData = {
-  id: `bf-${Date.now()}`,
-  lat: tempMarker.lat,
-  lng: tempMarker.lng,
-  type: newMarkerType,
-  desc: newMarkerDesc,
-  image: newMarkerImage,
-  date: new Date().toLocaleDateString(),
-
-  wheelLevel,
-
-  status: "approved",
-  isOfficial: true,
-};
-
-console.log("등록되는 데이터:", newBfData);
-console.log("wheelLevel =", newBfData.wheelLevel);
-
-  setBfMarkers((prev) => [...prev, newBfData]);
-
- 
-
-  // 폼 초기화 및 닫기
+  await push(ref(db, "bfMarkers"), newBfData);
 
   setTempMarker(null);
-
   setNewMarkerDesc("");
-
   setNewMarkerImage(null);
-
   setNewMarkerType("step");
-
 };
 
 // setPoint 파라미터를 추가합니다. (예: setStartPoint 또는 setEndPoint)
@@ -2599,9 +2569,7 @@ return (
                       
   <button
     onClick={() =>
-      setBfMarkers(prev =>
-        prev.filter(item => item.id !== m.id)
-      )
+      remove(ref(db, `bfMarkers/${m.id}`))
     }
     style={{ marginTop: "8px" }}
   >
@@ -2852,30 +2820,36 @@ console.log("현재 wheelLevel:", wheelLevel);
             reader.readAsDataURL(e.target.files[0]);
           }} />
           
-          <button onClick={() => {
-             console.log("등록 직전 wheelLevel:", wheelLevel);
+          <button onClick={async () => {
+console.log("Firebase 저장 버튼 클릭");
+  if (!desc) {
+    alert("설명을 입력해주세요!");
+    return;
+  }
 
-            if (!desc) return alert("설명을 입력해주세요!");
-            
-            // 💡 여기서도 props로 받은 isAdminLoggedIn을 사용합니다
-            setBfMarkers(prev => [...prev, {
-  id: `bf-${Date.now()}`,
-  lat: tempMarker.lat,
-  lng: tempMarker.lng,
-  type: selectedType,
-  desc,
-  image,
-  date: new Date().toLocaleDateString(),
-  status: isAdminLoggedIn ? "approved" : "pending",
-  isOfficial: isAdminLoggedIn,
- wheelLevel: isAdminLoggedIn ? wheelLevel : null
-}]);
-            
-            setTempMarker(null);
-            setDesc("");
-            setImage(null);
-            alert(isAdminLoggedIn ? "공식 아이콘이 등록되었습니다." : "제보 완료! 관리자 승인을 기다려주세요.");
-          }}>
+  await push(ref(db, "bfMarkers"), {
+    lat: tempMarker.lat,
+    lng: tempMarker.lng,
+    type: selectedType,
+    desc,
+    image,
+    date: new Date().toLocaleDateString(),
+    status: isAdminLoggedIn ? "approved" : "pending",
+    isOfficial: isAdminLoggedIn,
+    wheelLevel: isAdminLoggedIn ? wheelLevel : null
+  });
+
+  setTempMarker(null);
+  setDesc("");
+  setImage(null);
+
+  alert(
+    isAdminLoggedIn
+      ? "공식 아이콘이 등록되었습니다."
+      : "제보 완료! 관리자 승인을 기다려주세요."
+  );
+
+}}>
             {isAdminLoggedIn ? "등록하기" : "제보하기"}
           </button>
         </div>
