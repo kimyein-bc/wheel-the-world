@@ -11,6 +11,7 @@ import {
   Polyline,
   useMap,
 } from "react-leaflet";
+import { ref, set } from "firebase/database";
 
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -626,6 +627,23 @@ const buttonStyle = {
   textAlign: "center",
   backdropFilter: "blur(4px)"
 };
+function CourseCreator({
+  isCreatingCourse,
+  setCoursePoints
+}) {
+  useMapEvents({
+    click(e) {
+      if (!isCreatingCourse) return;
+
+      setCoursePoints(prev => [
+        ...prev,
+        [e.latlng.lat, e.latlng.lng]
+      ]);
+    }
+  });
+
+  return null;
+}
 function App() {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
@@ -638,6 +656,9 @@ useEffect(() => {
   window.addEventListener("popstate", handlePopState);
   return () => window.removeEventListener("popstate", handlePopState);
 }, []);
+const openCourse = (courseId) => {
+  setSelectedCourse(courseId);
+};
 
 // 💡 App 컴포넌트 시작 직후 선언부
 const [userRole, setUserRole] = useState("user"); // 'admin' 또는 'user' (테스트용으로 기본 admin 설정)
@@ -845,6 +866,8 @@ const mapRef = useRef(null);
   const [userLocation, setUserLocation] = useState(null);
   const [startCoords, setStartCoords] = useState(null);
 const [endCoords, setEndCoords] = useState(null);
+ const [selectedCourse, setSelectedCourse] = useState(null);
+
   // 💡 5번 클릭 감지를 위한 상태 및 타이머 설정
 const [clickCount, setClickCount] = useState(0);
 const clickTimeoutRef = useRef(null);
@@ -947,6 +970,35 @@ const [endMarkerPos, setEndMarkerPos] = useState(null);
 const animationRef = useRef(null);
 const [isFollowingUser, setIsFollowingUser] = useState(false);
 const [isAdmin, setIsAdmin] = useState(false);
+const [isCreatingCourse, setIsCreatingCourse] = useState(false);
+const [coursePoints, setCoursePoints] = useState([]);
+const saveWalkCourse = async () => {
+  if (coursePoints.length < 2) {
+    alert("코스를 2개 이상 찍어주세요.");
+    return;
+  }
+
+  try {
+    const courseId = Date.now();
+
+    await set(ref(db, `walkCourses/${courseId}`), {
+      title: "새 산책코스",
+      route: coursePoints,
+      createdAt: Date.now()
+    });
+
+    alert("산책코스 저장 완료!");
+
+    // 저장 성공 후에만 초기화
+    setCoursePoints([]);
+    setIsCreatingCourse(false);
+
+  } catch (error) {
+    console.error("저장 실패:", error);
+    alert("저장 실패!");
+  }
+};
+    
 // ✨ 한글 선택지로도 바로 위도/경도를 매칭할 수 있도록 키값을 확장했습니다!
 const locationPoints = {
   station: [37.6345, 126.832],  
@@ -981,6 +1033,8 @@ const animateWheelTrack = (fullRoute) => {
     const currentProgressFull = progress * totalSegments;
     const segmentIndex = Math.floor(currentProgressFull);
     const segmentProgress = currentProgressFull - segmentIndex;
+    
+
 
     const currentSegmentStart = fullRoute[segmentIndex];
     const currentSegmentEnd = fullRoute[segmentIndex + 1];
@@ -2569,19 +2623,48 @@ return (
 
       {/* 4. 산책 코스 화면 */}
       {currentView === "walk" && (
+        
         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
           {renderHeader && renderHeader()}
           <div style={{ flex: 1, padding: "40px", display: "flex", flexDirection: "column", alignItems: "center", overflowY: "auto", background: "#FAFAFA" }}>
             <h2 style={{ fontSize: "26px", fontWeight: "800", marginBottom: "25px", letterSpacing: "-0.5px" }}>🌳 화정동 힐링 산책 코스</h2>
             <div style={{ width: "100%", maxWidth: "800px", display: "flex", flexDirection: "column", gap: "20px" }}>
-              <div style={{ background: "white", borderRadius: "24px", padding: "24px", border: "1px solid #EAEAEA", display: "flex", gap: "20px", alignItems: "center", boxShadow: "0 4px 15px rgba(0,0,0,0.02)" }}>
+              <div
+  onClick={() => openCourse("centralPark")}
+  style={{
+    background: "white",
+    borderRadius: "24px",
+    padding: "24px",
+    border: "1px solid #EAEAEA",
+    display: "flex",
+    gap: "20px",
+    alignItems: "center",
+    boxShadow: "0 4px 15px rgba(0,0,0,0.02)",
+    cursor: "pointer",
+    transition: "0.2s"
+  }}
+>
                 <div style={{ fontSize: "32px", background: "#E8F5E9", width: "60px", height: "60px", borderRadius: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>🏞️</div>
                 <div style={{ flex: 1 }}>
                   <h4 style={{ margin: "0 0 5px 0", fontSize: "17px", fontWeight: "700" }}>화정 중앙공원 순환 코스</h4>
                   <p style={{ margin: 0, color: "#666", fontSize: "14px" }}>단차가 없는 완만한 1.2km 코스</p>
                 </div>
               </div>
-              <div style={{ background: "white", borderRadius: "24px", padding: "24px", border: "1px solid #EAEAEA", display: "flex", gap: "20px", alignItems: "center", boxShadow: "0 4px 15px rgba(0,0,0,0.02)" }}>
+              <div
+  onClick={() => openCourse("libraryRoad")}
+  style={{
+    background: "white",
+    borderRadius: "24px",
+    padding: "24px",
+    border: "1px solid #EAEAEA",
+    display: "flex",
+    gap: "20px",
+    alignItems: "center",
+    boxShadow: "0 4px 15px rgba(0,0,0,0.02)",
+    cursor: "pointer",
+    transition: "0.2s"
+  }}
+>
                 <div style={{ fontSize: "32px", background: "#E3F2FD", width: "60px", height: "60px", borderRadius: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>🎒</div>
                 <div style={{ flex: 1 }}>
                   <h4 style={{ margin: "0 0 5px 0", fontSize: "17px", fontWeight: "700" }}>덕양구청 ➔ 도서관 산책로</h4>
@@ -2592,6 +2675,117 @@ return (
           </div>
         </div>
       )}
+    {selectedCourse && (
+  <div
+    onClick={() => setSelectedCourse(null)}
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.5)",
+      zIndex: 9999,
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center"
+    }}
+  >
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        width: "90%",
+        maxWidth: "900px",
+        height: "80vh",
+        background: "white",
+        borderRadius: "20px",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column"
+      }}
+    >
+      <div
+        style={{
+          padding: "15px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center"
+        }}
+      >
+        <h2>
+          {selectedCourse === "centralPark"
+            ? "🌳 화정 중앙공원 순환 코스"
+            : "🎒 덕양구청 ➔ 도서관 산책로"}
+        </h2>
+
+        <button
+          onClick={() => setSelectedCourse(null)}
+        >
+          닫기
+        </button>
+      </div>
+
+      {isAdminLoggedIn && (
+        <div
+          style={{
+            padding: "10px 15px",
+            display: "flex",
+            gap: "10px"
+          }}
+        >
+          <button
+            onClick={() => {
+              setCoursePoints([]);
+              setIsCreatingCourse(true);
+            }}
+          >
+            코스 생성 시작
+          </button>
+
+          <button
+            onClick={saveWalkCourse}
+          >
+            코스 저장
+          </button>
+        </div>
+      )}
+
+      <div style={{ flex: 1 }}>
+        <MapContainer
+          center={[37.6457, 126.8382]}
+          zoom={16}
+          style={{
+            width: "100%",
+            height: "100%"
+          }}
+        >
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+
+          <CourseCreator
+            isCreatingCourse={isCreatingCourse}
+            setCoursePoints={setCoursePoints}
+          />
+
+          {coursePoints.map((point, idx) => (
+            <Marker
+              key={idx}
+              position={point}
+            />
+          ))}
+
+          {coursePoints.length > 1 && (
+            <Polyline
+              positions={coursePoints}
+              pathOptions={{
+                color: "#ff7a00",
+                weight: 6
+              }}
+            />
+          )}
+        </MapContainer>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }
