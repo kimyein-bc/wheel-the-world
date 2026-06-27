@@ -60,6 +60,27 @@ function getDistance(a, b) {
     )
   );
 }
+function getCourseDistance(route) {
+  if (!route || route.length < 2) return 0;
+
+  let total = 0;
+
+  for (let i = 0; i < route.length - 1; i++) {
+    total += getDistance(
+      {
+        lat: route[i][0],
+        lng: route[i][1]
+      },
+      {
+        lat: route[i + 1][0],
+        lng: route[i + 1][1]
+      }
+    );
+  }
+
+  return total;
+}
+  
 async function getRoute(start, end, mode, bfMarkers) {
   console.log("현재 모드:", mode);
   console.log("전체 마커:", bfMarkers);
@@ -84,6 +105,8 @@ async function getRoute(start, end, mode, bfMarkers) {
 
     return R * c;
   }
+  
+
 
   // -----------------------
   // 1. 기본 경로 요청
@@ -665,6 +688,15 @@ useEffect(() => {
 }, []);
 const openCourse = (courseId) => {
   setSelectedCourse(courseId);
+
+  const course = savedCourses.find(
+    (c) => c.courseType === courseId
+  );
+
+  if (course?.route) {
+    setAnimatedRoute([]);
+    animateWheelTrack(course.route);
+  }
 };
 
 // 💡 App 컴포넌트 시작 직후 선언부
@@ -971,6 +1003,14 @@ const [isAdmin, setIsAdmin] = useState(false);
 const [isCreatingCourse, setIsCreatingCourse] = useState(false);
 const [coursePoints, setCoursePoints] = useState([]);
 const [savedCourses, setSavedCourses] = useState([]);
+const currentCourse = savedCourses.find(
+  course => course.courseType === selectedCourse
+);
+const courseDistance = currentCourse
+  ? getCourseDistance(currentCourse.route)
+  : 0;
+  const estimatedMinutes =
+  Math.round((courseDistance / 1000) / 4 * 60);
 const saveWalkCourse = async () => {
   if (coursePoints.length < 2) {
     alert("코스를 2개 이상 찍어주세요.");
@@ -2759,8 +2799,7 @@ return (
 
           {coursePoints.map((point, idx) => (
             <Marker
-              key={idx}
-              position={point}
+             key={`${point.lat}-${point.lng}-${idx}`}
             />
           ))}
 
@@ -2775,17 +2814,118 @@ return (
           )}
           {savedCourses
   .filter(course => course.courseType === selectedCourse)
-  .map((course) => (
+  .map((course, idx) => (
     <Polyline
-      key={course.id}
+      key={course.createdAt || idx}
       positions={course.route}
       pathOptions={{
-        color: "#2563EB",
-        weight: 5
+        color: "#93C5FD",
+        weight: 6,
+        opacity: 0.5
       }}
     />
 ))}
+{animatedRoute.length > 0 && (
+ <Polyline
+  positions={animatedRoute}
+  pathOptions={{
+    color: "#2563EB",
+    weight: 8,
+    opacity: 0.95
+  }}
+/>
+)}
+{animatedRoute.length > 0 && (
+  <Marker
+    position={animatedRoute[animatedRoute.length - 1]}
+    icon={divIcon({
+      html: `
+        <div style="
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          width:38px;
+          height:38px;
+          background:white;
+          border-radius:50%;
+          box-shadow:0 4px 15px rgba(0,0,0,0.3);
+          border:3px solid #2563EB;
+        ">
+          <svg
+            class="spinning-wheel"
+            width="30"
+            height="30"
+            viewBox="0 0 100 100"
+            xmlns="http://www.w3.org/2000/svg"
+            style="transform-origin:center;"
+          >
+            <circle cx="50" cy="50" r="40" fill="#2C3E50" />
+            <circle cx="50" cy="50" r="30" fill="#5DADE2" stroke="#D6EAF8" stroke-width="5" />
+            <line x1="50" y1="20" x2="50" y2="80" stroke="white" stroke-width="4" />
+            <line x1="20" y1="50" x2="80" y2="50" stroke="white" stroke-width="4" />
+            <line x1="28" y1="28" x2="72" y2="72" stroke="white" stroke-width="4" />
+            <line x1="28" y1="72" x2="72" y2="28" stroke="white" stroke-width="4" />
+            <circle cx="50" cy="50" r="8" fill="#F8F9F9" stroke="#2C3E50" stroke-width="3" />
+          </svg>
+
+          <style>
+            @keyframes wheel-spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+
+            .spinning-wheel {
+              animation: wheel-spin 0.6s linear infinite;
+            }
+          </style>
+        </div>
+      `,
+      className: "",
+      iconSize: [38, 38],
+      iconAnchor: [19, 19]
+    })}
+  />
+)}
         </MapContainer>
+        <div
+  style={{
+    padding: "15px",
+    background: "#fff",
+    borderTop: "1px solid #E5E7EB",
+    display: "flex",
+    justifyContent: "space-around"
+  }}
+>
+  <div style={{ textAlign: "center" }}>
+    <div style={{ color: "#666", fontSize: "13px" }}>
+      총 거리
+    </div>
+
+    <div
+      style={{
+        fontSize: "22px",
+        fontWeight: "700"
+      }}
+    >
+      {(courseDistance / 1000).toFixed(1)} km
+    </div>
+  </div>
+
+  <div style={{ textAlign: "center" }}>
+    <div style={{ color: "#666", fontSize: "13px" }}>
+      예상 시간
+    </div>
+
+    <div
+      style={{
+        fontSize: "22px",
+        fontWeight: "700"
+      }}
+    >
+      약 {estimatedMinutes}분
+    </div>
+  </div>
+</div>
       </div>
     </div>
   </div>
