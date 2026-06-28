@@ -81,156 +81,7 @@ function getCourseDistance(route) {
   return total;
 }
   
-async function getRoute(start, end, mode, bfMarkers) {
-  console.log("현재 모드:", mode);
-  console.log("전체 마커:", bfMarkers);
 
-  // -----------------------
-  // 거리 계산 함수 (m)
-  // -----------------------
-  function getDistance(a, b) {
-    const R = 6371000;
-
-    const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-    const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-
-    const aa =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((a.lat * Math.PI) / 180) *
-      Math.cos((b.lat * Math.PI) / 180) *
-      Math.sin(dLng / 2) *
-      Math.sin(dLng / 2);
-
-    const c = 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1 - aa));
-
-    return R * c;
-  }
-  
-
-
-  // -----------------------
-  // 1. 기본 경로 요청
-  // -----------------------
-  const apiKey = "여기에_ORS_API_KEY";
-
-  const baseUrl =
-    `https://api.openrouteservice.org/v2/directions/foot-walking` +
-    `?api_key=${apiKey}` +
-    `&start=${start[1]},${start[0]}` +
-    `&end=${end[1]},${end[0]}`;
-
-  const baseRes = await fetch(baseUrl);
-  const baseData = await baseRes.json();
-
-  console.log("ORS 최종 응답:", baseData);
-
-  if (
-    !baseData.features ||
-    !baseData.features[0]
-  ) {
-    console.error("경로 생성 실패");
-    return [];
-  }
-
-  const baseRoute =
-    baseData.features[0].geometry.coordinates.map(
-      ([lng, lat]) => [lat, lng]
-    );
-
-  // -----------------------
-  // 2. 회피 대상 선정
-  // -----------------------
-  let blockedMarkers = [];
-
-  if (mode === "wheel1") {
-    blockedMarkers = bfMarkers.filter(
-      m => Number(m.wheelLevel) >= 1
-    );
-  }
-
-  if (mode === "wheel2") {
-    blockedMarkers = bfMarkers.filter(
-      m => Number(m.wheelLevel) >= 2
-    );
-  }
-
-  console.log("회피 대상:", blockedMarkers);
-
-  // -----------------------
-  // 3. 경로 위 장애물 찾기
-  // -----------------------
-  const obstacleOnRoute = blockedMarkers.find(marker =>
-    baseRoute.some(([lat, lng]) => {
-      const distance = getDistance(
-        { lat, lng },
-        {
-          lat: marker.lat,
-          lng: marker.lng
-        }
-      );
-
-      return distance < 10; // 10m 이내
-    })
-  );
-
-  console.log("경로 위 장애물:", obstacleOnRoute);
-
-  // -----------------------
-  // 장애물 없으면 기본 경로 반환
-  // -----------------------
-  if (!obstacleOnRoute) {
-    console.log("회피할 장애물 없음");
-    return baseRoute;
-  }
-
-  // -----------------------
-  // 4. 우회 지점 생성
-  // -----------------------
-  const waypoint = {
-    lat: obstacleOnRoute.lat + 0.0002,
-    lng: obstacleOnRoute.lng + 0.0002
-  };
-
-  console.log("우회 지점:", waypoint);
-
-  // -----------------------
-  // 5. 출발 -> 우회지점
-  // -----------------------
-  const url1 =
-    `https://api.openrouteservice.org/v2/directions/foot-walking` +
-    `?api_key=${apiKey}` +
-    `&start=${start[1]},${start[0]}` +
-    `&end=${waypoint.lng},${waypoint.lat}`;
-
-  const res1 = await fetch(url1);
-  const data1 = await res1.json();
-
-  // -----------------------
-  // 6. 우회지점 -> 도착
-  // -----------------------
-  const url2 =
-    `https://api.openrouteservice.org/v2/directions/foot-walking` +
-    `?api_key=${apiKey}` +
-    `&start=${waypoint.lng},${waypoint.lat}` +
-    `&end=${end[1]},${end[0]}`;
-
-  const res2 = await fetch(url2);
-  const data2 = await res2.json();
-
-  const route1 =
-    data1.features[0].geometry.coordinates.map(
-      ([lng, lat]) => [lat, lng]
-    );
-
-  const route2 =
-    data2.features[0].geometry.coordinates.map(
-      ([lng, lat]) => [lat, lng]
-    );
-
-  console.log("회피 경로 생성 완료");
-
-  return [...route1, ...route2];
-}
 // 기본 마커 아이콘 문제 해결
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -240,7 +91,7 @@ L.Icon.Default.mergeOptions({
 });
 
 function getLabel(type) {
-  if (type === "stairs") return "🪜 단차 / 계단";
+  if (type === "step" || type === "stairs") return "🪜 단차 / 계단";
   if (type === "narrow") return "↔️ 좁은 도로";
   if (type === "obstacle") return "🚧 실시간 장애물";
   if (type === "elevator") return "🛗 엘리베이터";
@@ -251,13 +102,14 @@ function getLabel(type) {
 
 function getIcon(type) {
   const config = {
-  stairs: { emoji: "🪜", color: "#EF4444" },
-  narrow: { emoji: "↔️", color: "#F59E0B" },
-  obstacle: { emoji: "🚧", color: "#DC2626" },
-  elevator: { emoji: "🛗", color: "#3B82F6" },
-  slope: { emoji: "📐", color: "#10B981" },
-  sidewalk: { emoji: "🧱", color: "#8B5CF6" },
-};
+    step: { emoji: "🪜", color: "#EF4444" },
+    stairs: { emoji: "🪜", color: "#EF4444" },
+    narrow: { emoji: "↔️", color: "#F59E0B" },
+    obstacle: { emoji: "🚧", color: "#DC2626" },
+    elevator: { emoji: "🛗", color: "#3B82F6" },
+    slope: { emoji: "📐", color: "#10B981" },
+    sidewalk: { emoji: "🧱", color: "#8B5CF6" },
+  };
   const current = config[type] || { emoji: "📍", color: "#54a0ff" };
   return divIcon({
     html: `
@@ -675,6 +527,7 @@ function CourseCreator({
   return null;
 }
 function App() {
+  const KAKAO_REST_API_KEY = "1425cc58ea2a07e5aea6e01a9b0dac74";
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
 useEffect(() => {
@@ -698,7 +551,16 @@ const openCourse = (courseId) => {
     animateWheelTrack(course.route);
   }
 };
+const [clientId] = useState(() => {
+  let savedId = localStorage.getItem("wheelClientId");
 
+  if (!savedId) {
+    savedId = crypto.randomUUID();
+    localStorage.setItem("wheelClientId", savedId);
+  }
+
+  return savedId;
+});
 // 💡 App 컴포넌트 시작 직후 선언부
 const [userRole, setUserRole] = useState("user"); // 'admin' 또는 'user' (테스트용으로 기본 admin 설정)
 
@@ -775,7 +637,7 @@ const handleMapSearch = async (e, currentSearchValue) => {
       {
         headers: {
           // 🌟 발급받으신 실제 카카오 REST API 키를 넣어주세요!
-          Authorization: `KakaoAK 1425cc58ea2a07e5aea6e01a9b0dac74` 
+          Authorization: `KakaoAK ${KAKAO_REST_API_KEY}`
         }
       }
     );
@@ -821,7 +683,7 @@ const handleSearchKeywordChange = async (value) => {
       `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(value)}&size=5`,
       {
         headers: {
-          Authorization: `KakaoAK 1425cc58ea2a07e5aea6e01a9b0dac74`
+          Authorization: `KakaoAK ${KAKAO_REST_API_KEY}`
         }
       }
     );
@@ -888,12 +750,26 @@ const bfConfig = {
     icon: "🧱",
   },
 };
+const getBfConfig = (type) => {
+  const normalizedType = type === "stairs" ? "step" : type;
 
+  return (
+    bfConfig[normalizedType] || {
+      label: "기타",
+      color: "#6B7280",
+      icon: "📍"
+    }
+  );
+};
 const mapRef = useRef(null);
+const surveyWatchRef = useRef(null);
   const [currentView, setCurrentView] = useState("home");
   const [markers, setMarkers] = useState([]);
-  const [selectedType, setSelectedType] = useState("stairs");
+  const [selectedType, setSelectedType] = useState("step");
   const [userLocation, setUserLocation] = useState(null);
+  const [isSurveying, setIsSurveying] = useState(false);
+  const [surveyTracks, setSurveyTracks] = useState([]);
+const [surveyTrack, setSurveyTrack] = useState([]);
   const [startCoords, setStartCoords] = useState(null);
 const [endCoords, setEndCoords] = useState(null);
  const [selectedCourse, setSelectedCourse] = useState(null);
@@ -974,7 +850,7 @@ const fetchAutoComplete = async (keyword, setSuggestions) => {
     const res = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=5`, {
       headers: { 
         // 🔑 발급받으신 실제 카카오 REST API 키를 넣어주세요!
-        Authorization: `KakaoAK 1425cc58ea2a07e5aea6e01a9b0dac74` 
+        Authorization: `KakaoAK ${KAKAO_REST_API_KEY}`
       }
     });
     const data = await res.json();
@@ -1119,47 +995,63 @@ const animateWheelTrack = (fullRoute) => {
 
 const ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjZiMjY1Y2E5NjZjODQxZmE5MjJjNDEzM2IyYWNhN2U2IiwiaCI6Im11cm11cjY0In0=";
 const getObstacles = (mode, bfMarkers) => {
-  // 일반 모드거나 마커가 없으면 빈 값 반환 (회피 안 함)
+  // 일반 모드거나 마커가 없으면 회피 안 함
   if (mode === "normal" || !bfMarkers || bfMarkers.length === 0) {
     return null;
   }
 
+  // ✅ 승인된 마커만 경로 회피에 사용
+  const approvedMarkers = bfMarkers.filter(
+    (m) => m.status === "approved" || m.isOfficial === true
+  );
+
   let targetMarkers = [];
 
-  // 모드에 따라 피해야 할 마커 필터링
+  // wheel1: 1단계, 2단계 모두 회피
   if (mode === "wheel1") {
-    // wheel1: 레벨 1과 2 모두 피함
-    targetMarkers = bfMarkers.filter(m => (m.wheelLevel ?? 1) === 1 || (m.wheelLevel ?? 1) === 2);
-  } else if (mode === "wheel2") {
-    // wheel2: 레벨 2만 피함
-    targetMarkers = bfMarkers.filter(m => (m.wheelLevel ?? 1) === 2);
+    targetMarkers = approvedMarkers.filter(
+      (m) => Number(m.wheelLevel) === 1 || Number(m.wheelLevel) === 2
+    );
   }
 
-  // 피할 마커가 없으면 빈 값 반환
+  // wheel2: 2단계만 회피
+  else if (mode === "wheel2") {
+    targetMarkers = approvedMarkers.filter(
+      (m) => Number(m.wheelLevel) === 2
+    );
+  }
+
   if (targetMarkers.length === 0) return null;
 
-  // 마커를 사각형(Polygon) 구역으로 변환
-  const polygons = targetMarkers.map(marker => {
-    const buffer = 0.0001// 약 30m 반경의 회피 구역 (너무 좁으면 0.0005로 늘리세요)
+  const polygons = targetMarkers.map((marker) => {
+    const buffer = 0.00015;
+
     return [[
       [marker.lng - buffer, marker.lat - buffer],
       [marker.lng + buffer, marker.lat - buffer],
       [marker.lng + buffer, marker.lat + buffer],
       [marker.lng - buffer, marker.lat + buffer],
-      [marker.lng - buffer, marker.lat - buffer]
+      [marker.lng - buffer, marker.lat - buffer],
     ]];
   });
 
   console.log(`[디버그] ${mode} 모드 - 회피 구역 생성 개수:`, polygons.length);
 
-  return { type: "MultiPolygon", coordinates: polygons };
+  return {
+    type: "MultiPolygon",
+    coordinates: polygons,
+  };
 };
 const getRoute = async (start, end, mode = "normal", bfMarkers = []) => {
+  const emptyRouteResult = {
+    routeCoords: [],
+    distance: 0,
+    duration: 0
+  };
+
   try {
-    // 1. 회피해야 할 장애물 구역 가져오기
     const avoidOptions = getObstacles(mode, bfMarkers);
 
-    // 2. API에 보낼 기본 데이터 세팅
     const bodyData = {
       coordinates: [
         [start.lng, start.lat],
@@ -1167,7 +1059,6 @@ const getRoute = async (start, end, mode = "normal", bfMarkers = []) => {
       ]
     };
 
-    // 3. 피해야 할 구역이 존재한다면 options 객체 추가 
     if (avoidOptions) {
       bodyData.options = {
         avoid_polygons: avoidOptions
@@ -1175,14 +1066,14 @@ const getRoute = async (start, end, mode = "normal", bfMarkers = []) => {
     }
 
     const url = "https://api.openrouteservice.org/v2/directions/wheelchair/geojson";
-    
+
     const res = await fetch(url, {
       method: "POST",
       headers: {
         Authorization: ORS_API_KEY,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(bodyData), // 회피 옵션이 포함된 데이터 전송
+      body: JSON.stringify(bodyData),
     });
 
     const data = await res.json();
@@ -1190,33 +1081,29 @@ const getRoute = async (start, end, mode = "normal", bfMarkers = []) => {
 
     if (data.error) {
       console.error("API 에러 상세:", data.error);
-      return {
-    routeCoords: [],
-    distance: 0,
-    duration: 0
-  };
-}
+      return emptyRouteResult;
+    }
 
-    if (!data.features || data.features.length === 0) return [];
-    
-    // 4. 경로 좌표 추출 및 반환
+    if (!data.features || data.features.length === 0) {
+      return emptyRouteResult;
+    }
+
     const routeCoords = data.features[0].geometry.coordinates.map(
-      ([lng, lat]) => [lat, lng] // 지도에 그리기 위해 [위도, 경도]로 변환
+      ([lng, lat]) => [lat, lng]
     );
 
-    const summary =
-  data.features[0].properties.summary;
+    const summary = data.features[0].properties.summary;
 
-return {
-  routeCoords,
-  distance: (summary.distance / 1000).toFixed(1),
-  duration: Math.round(summary.duration / 60)
-};
+    return {
+      routeCoords,
+      distance: (summary.distance / 1000).toFixed(1),
+      duration: Math.round(summary.duration / 60)
+    };
 
   } catch (err) {
     console.error("getRoute 오류:", err);
     console.error(err.stack);
-    return [];
+    return emptyRouteResult;
   }
 };
 const handleSearchRoute = async (e) => {
@@ -1253,7 +1140,7 @@ const handleSearchRoute = async (e) => {
       const res = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}`, {
         headers: { 
           // 🌟 여기에 실제 카카오 REST API 키를 넣어주세요!
-          Authorization: `KakaoAK 1425cc58ea2a07e5aea6e01a9b0dac74` 
+          Authorization: `KakaoAK ${KAKAO_REST_API_KEY}`
         }
       });
       const data = await res.json();
@@ -1339,7 +1226,7 @@ setRouteInfo({
 });
 console.log(
   "wheelLevel",
-  bfMarkers[0].wheelLevel
+  bfMarkers[0]?.wheelLevel
 );
 console.log("첫번째 마커", bfMarkers[0]);
 console.log(
@@ -1423,10 +1310,7 @@ const handleAddBfMarker = async () => {
     return;
   }
 
-  if (!newMarkerDesc.trim()) {
-    alert("상세 설명을 입력해주세요!");
-    return;
-  }
+  
 
   const newBfData = {
     lat: tempMarker.lat,
@@ -1480,9 +1364,9 @@ if (setCoords) {
       }
 
       // --- 📍 수정된 부분: 주소 변환 안 하고 '내 위치'라고만 적기 ---
-      if (setPoint) {
-        setPoint("내 위치"); // 입력창에 '내 위치'라는 글자만 띄움
-      }
+      if (typeof setPoint === "function") {
+  setPoint("내 위치");
+}
       // ----------------------------------------------------
 
       setTimeout(() => {
@@ -1516,7 +1400,83 @@ const resetRoute = () => {
 useEffect(() => {
   return () => { if (animationRef.current) cancelAnimationFrame(animationRef.current); };
 }, []);
+useEffect(() => {
+  if (!isSurveying) {
+    if (surveyWatchRef.current !== null) {
+      navigator.geolocation.clearWatch(surveyWatchRef.current);
+      surveyWatchRef.current = null;
+    }
+    return;
+  }
 
+  surveyWatchRef.current = navigator.geolocation.watchPosition(
+    (position) => {
+      const point = [
+        position.coords.latitude,
+        position.coords.longitude,
+      ];
+
+      setSurveyTrack((prev) => [...prev, point]);
+    },
+    (err) => {
+      console.error("GPS 오류:", err);
+    },
+    {
+      enableHighAccuracy: true,
+      maximumAge: 0,
+      timeout: 10000,
+    }
+  );
+
+  return () => {
+    if (surveyWatchRef.current !== null) {
+      navigator.geolocation.clearWatch(surveyWatchRef.current);
+    }
+  };
+}, [isSurveying]);
+const saveSurveyTrack = async () => {
+  if (surveyTrack.length < 2) {
+    alert("저장할 조사 경로가 없습니다.");
+    return;
+  }
+
+  try {
+    await push(ref(db, "surveyTracks"), {
+      route: surveyTrack,
+      createdAt: Date.now()
+    });
+
+    alert("조사 경로 저장 완료!");
+
+    setIsSurveying(false);
+    setSurveyTrack([]);
+
+  } catch (err) {
+    console.error(err);
+    alert("저장 실패");
+  }
+};
+useEffect(() => {
+  const surveyRef = ref(db, "surveyTracks");
+
+  const unsubscribe = onValue(surveyRef, (snapshot) => {
+    const data = snapshot.val();
+
+    if (!data) {
+      setSurveyTracks([]);
+      return;
+    }
+
+    const tracks = Object.entries(data).map(([id, value]) => ({
+      id,
+      ...value
+    }));
+
+    setSurveyTracks(tracks);
+  });
+
+  return () => unsubscribe();
+}, []);
 const renderHeader = () => (
   <div style={{
     position: "fixed", top: 0, left: 0, width: "100%", height: "60px",
@@ -2103,6 +2063,26 @@ return (
 >
   <MapSetter mapRef={mapRef} />
   <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+  {surveyTracks.map((track) => (
+  <Polyline
+    key={track.id}
+    positions={track.route}
+    pathOptions={{
+      color: "#3B82F6",
+      weight: 5,
+      opacity: 0.7
+    }}
+  />
+))}
+{surveyTrack.length > 1 && (
+  <Polyline
+    positions={surveyTrack}
+    pathOptions={{
+      color: "#2563EB",
+      weight: 6
+    }}
+  />
+)}
   {isRouteSearched && <MoveMapToRoute route={routeSteps} />}                
   
   {/* 📍 현재 내 위치 마커 */}
@@ -2205,6 +2185,7 @@ return (
           <div style={{ display: "flex", gap: "4px" }}>
             <button onClick={handleAddBfMarker} style={{ flex: 1, background: "#2563EB", color: "white", border: "none", padding: "6px", borderRadius: "4px", fontWeight: "bold", fontSize: "12px", cursor: "pointer" }}>등록</button>
             <button onClick={() => setTempMarker(null)} style={{ background: "#EF4444", color: "white", border: "none", padding: "6px", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}>취소</button>
+           
           </div>
         </div>
       </Popup>
@@ -2216,7 +2197,7 @@ return (
   // 안전길찾기 지도와 주민제보 지도 모두 이 조건을 사용하세요
 .filter((m) => m.isOfficial === true || m.status === "approved")// ★ 조건 추가: 공식 마커이거나 승인된 마커만 표시
   .map((m) => {
-    const config = bfConfig[m.type] || { color: "#6B7280", icon: "📍", label: "기타" };
+    const config = getBfConfig(m.type);
     
     return (
       <Marker 
@@ -2376,13 +2357,15 @@ return (
       )}
     </>
   )}
+ 
 </MapContainer>
+
             </div>
           </div>
         </div>
       )}
 
-     {/* 3. 주민 제보 화면 */}
+    
 {/* 3. 주민 제보 화면 */}
 {currentView === "create" && (
   <div
@@ -2480,18 +2463,18 @@ return (
   </button>
 
   <button
-    onClick={moveToMyLocation}
-    style={{
-      padding: "10px 14px",
-      border: "none",
-      borderRadius: "8px",
-      background: "#2563EB",
-      color: "white",
-      cursor: "pointer"
-    }}
-  >
-    📍
-  </button>
+  onClick={() => moveToMyLocation()}
+  style={{
+    padding: "10px 14px",
+    border: "none",
+    borderRadius: "8px",
+    background: "#2563EB",
+    color: "white",
+    cursor: "pointer"
+  }}
+>
+  📍
+</button>
 </div>
 
 
@@ -2568,6 +2551,29 @@ return (
 
         <MapContainer center={[37.6345, 126.832]} zoom={16} style={{ width: "100%", height: "100%" }} ref={mapRef}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          {/* 📍 현재 내 위치 마커 */}
+{userLocation && (
+  <Marker
+    position={userLocation}
+    icon={divIcon({
+      html: `
+        <div style="
+          width:22px;
+          height:22px;
+          background:#2563EB;
+          border:4px solid white;
+          border-radius:50%;
+          box-shadow:0 0 12px rgba(37,99,235,0.5);
+        "></div>
+      `,
+      className: "",
+      iconSize: [22, 22],
+      iconAnchor: [11, 11],
+    })}
+  >
+    <Popup>📍 현재 내 위치</Popup>
+  </Marker>
+)}
 
           {/* 제보 입력을 위한 클릭 이벤트 컴포넌트 */}
           {/* App.jsx 의 return 안에서 AddMarker 호출하는 부분을 이렇게 바꾸세요 */}
@@ -2585,7 +2591,7 @@ return (
   isAdminLoggedIn={isAdminLoggedIn} 
    wheelLevel={wheelLevel}
   setWheelLevel={setWheelLevel}
-  
+  clientId={clientId}
 />
 
           {/* 📌 모든 데이터 통합 렌더링 (공식 + 주민제보) */}
@@ -2629,17 +2635,40 @@ return (
                     <p>{m.desc}</p>
                     {m.image && <img src={m.image} style={{ width: "100px", borderRadius: "5px" }} />}
                     <br />
-                    {m.status === "pending" && (
-                      
-  <button
-    onClick={() =>
-      remove(ref(db, `bfMarkers/${m.id}`))
-    }
-    style={{ marginTop: "8px" }}
-  >
-    삭제하기
-  </button>
-  
+                    {m.status === "pending" && (userRole === "admin" || m.ownerId === clientId) && (
+  <div style={{ display: "flex", gap: "6px", justifyContent: "center", marginTop: "8px" }}>
+    <button
+      onClick={async () => {
+        const newDesc = window.prompt("수정할 설명을 입력하세요.", m.desc || "");
+
+        if (newDesc === null) return;
+
+        if (!newDesc.trim()) {
+          alert("설명은 비워둘 수 없습니다.");
+          return;
+        }
+
+        await update(ref(db, `bfMarkers/${m.id}`), {
+          desc: newDesc.trim(),
+          editedAt: Date.now()
+        });
+
+        alert("제보 내용이 수정되었습니다.");
+      }}
+    >
+      수정하기
+    </button>
+
+    <button
+      onClick={async () => {
+        if (window.confirm("이 제보를 삭제할까요?")) {
+          await remove(ref(db, `bfMarkers/${m.id}`));
+        }
+      }}
+    >
+      삭제하기
+    </button>
+  </div>
 )}
 
                   </div>
@@ -2653,283 +2682,7 @@ return (
   </div>
 )}
 
-      {/* 4. 산책 코스 화면 */}
-      {currentView === "walk" && (
-        
-        <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-          {renderHeader && renderHeader()}
-          <div style={{ flex: 1, padding: "40px", display: "flex", flexDirection: "column", alignItems: "center", overflowY: "auto", background: "#FAFAFA" }}>
-            <h2 style={{ fontSize: "26px", fontWeight: "800", marginBottom: "25px", letterSpacing: "-0.5px" }}>🌳 화정동 힐링 산책 코스</h2>
-            <div style={{ width: "100%", maxWidth: "800px", display: "flex", flexDirection: "column", gap: "20px" }}>
-              <div
-  onClick={() => openCourse("centralPark")}
-  style={{
-    background: "white",
-    borderRadius: "24px",
-    padding: "24px",
-    border: "1px solid #EAEAEA",
-    display: "flex",
-    gap: "20px",
-    alignItems: "center",
-    boxShadow: "0 4px 15px rgba(0,0,0,0.02)",
-    cursor: "pointer",
-    transition: "0.2s"
-  }}
->
-                <div style={{ fontSize: "32px", background: "#E8F5E9", width: "60px", height: "60px", borderRadius: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>🏞️</div>
-                <div style={{ flex: 1 }}>
-                  <h4 style={{ margin: "0 0 5px 0", fontSize: "17px", fontWeight: "700" }}>화정 중앙공원 순환 코스</h4>
-                  <p style={{ margin: 0, color: "#666", fontSize: "14px" }}>단차가 없는 완만한 1.2km 코스</p>
-                </div>
-              </div>
-              <div
-  onClick={() => openCourse("libraryRoad")}
-  style={{
-    background: "white",
-    borderRadius: "24px",
-    padding: "24px",
-    border: "1px solid #EAEAEA",
-    display: "flex",
-    gap: "20px",
-    alignItems: "center",
-    boxShadow: "0 4px 15px rgba(0,0,0,0.02)",
-    cursor: "pointer",
-    transition: "0.2s"
-  }}
->
-                <div style={{ fontSize: "32px", background: "#E3F2FD", width: "60px", height: "60px", borderRadius: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>🎒</div>
-                <div style={{ flex: 1 }}>
-                  <h4 style={{ margin: "0 0 5px 0", fontSize: "17px", fontWeight: "700" }}>덕양구청 ➔ 도서관 산책로</h4>
-                  <p style={{ margin: 0, color: "#666", fontSize: "14px" }}>보도 정비가 잘 된 안전한 1.8km 코스</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    {selectedCourse && (
-  <div
-    onClick={() => setSelectedCourse(null)}
-    style={{
-      position: "fixed",
-      inset: 0,
-      background: "rgba(0,0,0,0.5)",
-      zIndex: 9999,
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center"
-    }}
-  >
-    <div
-      onClick={(e) => e.stopPropagation()}
-      style={{
-        width: "90%",
-        maxWidth: "900px",
-        height: "80vh",
-        background: "white",
-        borderRadius: "20px",
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column"
-      }}
-    >
-      <div
-        style={{
-          padding: "15px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center"
-        }}
-      >
-        <h2>
-          {selectedCourse === "centralPark"
-            ? "🌳 화정 중앙공원 순환 코스"
-            : "🎒 덕양구청 ➔ 도서관 산책로"}
-        </h2>
-
-        <button
-          onClick={() => setSelectedCourse(null)}
-        >
-          닫기
-        </button>
-      </div>
-
-      {isAdminLoggedIn && (
-        <div
-          style={{
-            padding: "10px 15px",
-            display: "flex",
-            gap: "10px"
-          }}
-        >
-          <button
-            onClick={() => {
-              setCoursePoints([]);
-              setIsCreatingCourse(true);
-            }}
-          >
-            코스 생성 시작
-          </button>
-
-          <button
-            onClick={saveWalkCourse}
-          >
-            코스 저장
-          </button>
-        </div>
-      )}
-
-      <div style={{ flex: 1 }}>
-        <MapContainer
-          center={[37.6457, 126.8382]}
-          zoom={16}
-          style={{
-            width: "100%",
-            height: "100%"
-          }}
-        >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-
-          <CourseCreator
-            isCreatingCourse={isCreatingCourse}
-            setCoursePoints={setCoursePoints}
-          />
-
-          {coursePoints.map((point, idx) => (
-            <Marker
-             key={`${point.lat}-${point.lng}-${idx}`}
-            />
-          ))}
-
-          {coursePoints.length > 1 && (
-            <Polyline
-              positions={coursePoints}
-              pathOptions={{
-                color: "#ff7a00",
-                weight: 6
-              }}
-            />
-          )}
-          {savedCourses
-  .filter(course => course.courseType === selectedCourse)
-  .map((course, idx) => (
-    <Polyline
-      key={course.createdAt || idx}
-      positions={course.route}
-      pathOptions={{
-        color: "#93C5FD",
-        weight: 6,
-        opacity: 0.5
-      }}
-    />
-))}
-{animatedRoute.length > 0 && (
- <Polyline
-  positions={animatedRoute}
-  pathOptions={{
-    color: "#2563EB",
-    weight: 8,
-    opacity: 0.95
-  }}
-/>
-)}
-{animatedRoute.length > 0 && (
-  <Marker
-    position={animatedRoute[animatedRoute.length - 1]}
-    icon={divIcon({
-      html: `
-        <div style="
-          display:flex;
-          align-items:center;
-          justify-content:center;
-          width:38px;
-          height:38px;
-          background:white;
-          border-radius:50%;
-          box-shadow:0 4px 15px rgba(0,0,0,0.3);
-          border:3px solid #2563EB;
-        ">
-          <svg
-            class="spinning-wheel"
-            width="30"
-            height="30"
-            viewBox="0 0 100 100"
-            xmlns="http://www.w3.org/2000/svg"
-            style="transform-origin:center;"
-          >
-            <circle cx="50" cy="50" r="40" fill="#2C3E50" />
-            <circle cx="50" cy="50" r="30" fill="#5DADE2" stroke="#D6EAF8" stroke-width="5" />
-            <line x1="50" y1="20" x2="50" y2="80" stroke="white" stroke-width="4" />
-            <line x1="20" y1="50" x2="80" y2="50" stroke="white" stroke-width="4" />
-            <line x1="28" y1="28" x2="72" y2="72" stroke="white" stroke-width="4" />
-            <line x1="28" y1="72" x2="72" y2="28" stroke="white" stroke-width="4" />
-            <circle cx="50" cy="50" r="8" fill="#F8F9F9" stroke="#2C3E50" stroke-width="3" />
-          </svg>
-
-          <style>
-            @keyframes wheel-spin {
-              0% { transform: rotate(0deg); }
-              100% { transform: rotate(360deg); }
-            }
-
-            .spinning-wheel {
-              animation: wheel-spin 0.6s linear infinite;
-            }
-          </style>
-        </div>
-      `,
-      className: "",
-      iconSize: [38, 38],
-      iconAnchor: [19, 19]
-    })}
-  />
-)}
-        </MapContainer>
-        <div
-  style={{
-    padding: "15px",
-    background: "#fff",
-    borderTop: "1px solid #E5E7EB",
-    display: "flex",
-    justifyContent: "space-around"
-  }}
->
-  <div style={{ textAlign: "center" }}>
-    <div style={{ color: "#666", fontSize: "13px" }}>
-      총 거리
-    </div>
-
-    <div
-      style={{
-        fontSize: "22px",
-        fontWeight: "700"
-      }}
-    >
-      {(courseDistance / 1000).toFixed(1)} km
-    </div>
-  </div>
-
-  <div style={{ textAlign: "center" }}>
-    <div style={{ color: "#666", fontSize: "13px" }}>
-      예상 시간
-    </div>
-
-    <div
-      style={{
-        fontSize: "22px",
-        fontWeight: "700"
-      }}
-    >
-      약 {estimatedMinutes}분
-    </div>
-  </div>
-</div>
-      </div>
-    </div>
-  </div>
-)}
+      
     </div>
   );
 }
@@ -2948,6 +2701,7 @@ function AddMarker({
   isAdminLoggedIn,
   wheelLevel,
   setWheelLevel,
+  clientId,
 })
  {
   useMapEvents({
@@ -3004,16 +2758,17 @@ console.log("Firebase 저장 버튼 클릭");
   }
 
   await push(ref(db, "bfMarkers"), {
-    lat: tempMarker.lat,
-    lng: tempMarker.lng,
-    type: selectedType,
-    desc,
-    image,
-    date: new Date().toLocaleDateString(),
-    status: isAdminLoggedIn ? "approved" : "pending",
-    isOfficial: isAdminLoggedIn,
-    wheelLevel: isAdminLoggedIn ? wheelLevel : null
-  });
+  lat: tempMarker.lat,
+  lng: tempMarker.lng,
+  type: selectedType,
+  desc,
+  image,
+  date: new Date().toLocaleDateString(),
+  status: isAdminLoggedIn ? "approved" : "pending",
+  isOfficial: isAdminLoggedIn,
+  wheelLevel: isAdminLoggedIn ? wheelLevel : null,
+  ownerId: clientId
+});
 
   setTempMarker(null);
   setDesc("");
