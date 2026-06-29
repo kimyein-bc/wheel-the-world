@@ -40,49 +40,7 @@ async function getCoords(place) {
     lng: Number(data[0].lon),
   };
 }
-function getDistance(a, b) {
-  const R = 6371000;
-
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-
-  const aa =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(a.lat * Math.PI / 180) *
-      Math.cos(b.lat * Math.PI / 180) *
-      Math.sin(dLng / 2) ** 2;
-
-  return (
-    2 *
-    R *
-    Math.atan2(
-      Math.sqrt(aa),
-      Math.sqrt(1 - aa)
-    )
-  );
-}
-function getCourseDistance(route) {
-  if (!route || route.length < 2) return 0;
-
-  let total = 0;
-
-  for (let i = 0; i < route.length - 1; i++) {
-    total += getDistance(
-      {
-        lat: route[i][0],
-        lng: route[i][1]
-      },
-      {
-        lat: route[i + 1][0],
-        lng: route[i + 1][1]
-      }
-    );
-  }
-
-  return total;
-}
   
-
 // 기본 마커 아이콘 문제 해결
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -510,23 +468,7 @@ const buttonStyle = {
   textAlign: "center",
   backdropFilter: "blur(4px)"
 };
-function CourseCreator({
-  isCreatingCourse,
-  setCoursePoints
-}) {
-  useMapEvents({
-    click(e) {
-      if (!isCreatingCourse) return;
 
-      setCoursePoints(prev => [
-        ...prev,
-        [e.latlng.lat, e.latlng.lng]
-      ]);
-    }
-  });
-
-  return null;
-}
 function App() {
   const KAKAO_REST_API_KEY = "1425cc58ea2a07e5aea6e01a9b0dac74";
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -540,18 +482,7 @@ useEffect(() => {
   window.addEventListener("popstate", handlePopState);
   return () => window.removeEventListener("popstate", handlePopState);
 }, []);
-const openCourse = (courseId) => {
-  setSelectedCourse(courseId);
 
-  const course = savedCourses.find(
-    (c) => c.courseType === courseId
-  );
-
-  if (course?.route) {
-    setAnimatedRoute([]);
-    animateWheelTrack(course.route);
-  }
-};
 const [clientId] = useState(() => {
   let savedId = localStorage.getItem("wheelClientId");
 
@@ -773,7 +704,7 @@ const surveyWatchRef = useRef(null);
 const [surveyTrack, setSurveyTrack] = useState([]);
   const [startCoords, setStartCoords] = useState(null);
 const [endCoords, setEndCoords] = useState(null);
- const [selectedCourse, setSelectedCourse] = useState(null);
+ 
 
   // 💡 5번 클릭 감지를 위한 상태 및 타이머 설정
 const [clickCount, setClickCount] = useState(0);
@@ -967,66 +898,8 @@ const [endMarkerPos, setEndMarkerPos] = useState(null);
 const animationRef = useRef(null);
 const [isFollowingUser, setIsFollowingUser] = useState(false);
 const [isAdmin, setIsAdmin] = useState(false);
-const [isCreatingCourse, setIsCreatingCourse] = useState(false);
-const [coursePoints, setCoursePoints] = useState([]);
-const [savedCourses, setSavedCourses] = useState([]);
-const currentCourse = savedCourses.find(
-  course => course.courseType === selectedCourse
-);
-const courseDistance = currentCourse
-  ? getCourseDistance(currentCourse.route)
-  : 0;
-  const estimatedMinutes =
-  Math.round((courseDistance / 1000) / 4 * 60);
-const saveWalkCourse = async () => {
-  if (coursePoints.length < 2) {
-    alert("코스를 2개 이상 찍어주세요.");
-    return;
-  }
 
-  try {
-    const courseId = Date.now();
 
-    await set(ref(db, `walkCourses/${courseId}`), {
-      title: "새 산책코스",
-
-      courseType: selectedCourse, // 추가
-
-      route: coursePoints,
-
-      createdAt: Date.now()
-    });
-
-    alert("산책코스 저장 완료!");
-
-    setCoursePoints([]);
-    setIsCreatingCourse(false);
-
-  } catch (error) {
-    console.error(error);
-  }
-};
-useEffect(() => {
-  const coursesRef = ref(db, "walkCourses");
-
-  const unsubscribe = onValue(coursesRef, (snapshot) => {
-    const data = snapshot.val();
-
-    if (!data) {
-      setSavedCourses([]);
-      return;
-    }
-
-    const courses = Object.entries(data).map(([id, value]) => ({
-      id,
-      ...value
-    }));
-
-    setSavedCourses(courses);
-  });
-
-  return () => unsubscribe();
-}, []);
     
 // ✨ 한글 선택지로도 바로 위도/경도를 매칭할 수 있도록 키값을 확장했습니다!
 const locationPoints = {
@@ -1856,46 +1729,7 @@ return (
           </p>
         </div>
 
-        {/* 산책 코스 */}
-        <div
-          onClick={() => setCurrentView("walk")}
-          style={{
-            background: "rgba(255,255,255,0.92)",
-            borderRadius: "28px",
-            padding: isMobile ? "20px 18px" : "26px 22px",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
-            border: "2px solid #EBF1F6",
-            cursor: "pointer",
-            transition: "0.2s",
-            backdropFilter: "blur(4px)",
-          }}
-        >
-          <div style={{ fontSize: "36px", marginBottom: "8px" }}>🌳</div>
-
-          <h3
-            style={{
-              fontSize: isMobile ? "18px" : "20px",
-              margin: "0 0 6px 0",
-              fontWeight: "800",
-              color: "#222",
-            }}
-          >
-            산책 코스 추천
-          </h3>
-
-          <p
-            style={{
-              color: "#555",
-              fontSize: isMobile ? "12px" : "13px",
-              margin: 0,
-              lineHeight: "1.5",
-            }}
-          >
-            휠체어와 유모차도 편안하게
-            <br />
-            거닐 수 있는 동네 힐링 코스
-          </p>
-        </div>
+       
       </div>
       {/* 🚪 5번 클릭 비밀 문 */}
 <footer 
