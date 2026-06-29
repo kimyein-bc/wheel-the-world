@@ -104,30 +104,60 @@ function MoveMapToRoute({ route }) {
 const CuteCartoonBackground = () => (
   <>
     <style>{`
-      @keyframes moveRight {
+      @keyframes moveRightSoft {
         0% {
-          transform: translateX(-180px);
-        }
-        100% {
-          transform: translateX(calc(100vw + 220px));
-        }
-      }
-
-      @keyframes moveLeft {
-        0% {
-          transform: translateX(calc(100vw + 220px));
-        }
-        100% {
           transform: translateX(-220px);
         }
+        100% {
+          transform: translateX(calc(100vw + 260px));
+        }
       }
 
-      @keyframes floaty {
+      @keyframes moveLeftSoft {
+        0% {
+          transform: translateX(calc(100vw + 260px));
+        }
+        100% {
+          transform: translateX(-260px);
+        }
+      }
+
+      @keyframes floatSoft {
         0%, 100% {
           transform: translateY(0px);
         }
         50% {
-          transform: translateY(-6px);
+          transform: translateY(-7px);
+        }
+      }
+
+      @keyframes cloudDrift {
+        0% {
+          transform: translateX(0px);
+        }
+        50% {
+          transform: translateX(12px);
+        }
+        100% {
+          transform: translateX(0px);
+        }
+      }
+
+      @keyframes shimmer {
+        0%, 100% {
+          opacity: 0.35;
+        }
+        50% {
+          opacity: 0.6;
+        }
+      }
+
+      @keyframes wheelSpin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
         }
       }
     `}</style>
@@ -139,15 +169,37 @@ const CuteCartoonBackground = () => (
         overflow: "hidden",
         zIndex: 0,
         pointerEvents: "none",
+        background:
+          "linear-gradient(to bottom, #8ED0FF 0%, #BDE7FF 28%, #E6F7FF 54%, #CDEAB6 72%, #8DCC6E 100%)",
       }}
     >
-      {/* 하늘 */}
+      {/* 종이 질감 */}
       <div
         style={{
           position: "absolute",
           inset: 0,
+          opacity: 0.16,
+          backgroundImage: `
+            radial-gradient(circle at 20% 30%, rgba(255,255,255,0.9) 0 1px, transparent 1.2px),
+            radial-gradient(circle at 70% 60%, rgba(255,255,255,0.7) 0 1px, transparent 1.2px),
+            radial-gradient(circle at 40% 80%, rgba(255,255,255,0.55) 0 1px, transparent 1.2px)
+          `,
+          backgroundSize: "18px 18px, 24px 24px, 28px 28px",
+        }}
+      />
+
+      {/* 햇빛 */}
+      <div
+        style={{
+          position: "absolute",
+          top: "-30px",
+          right: "-20px",
+          width: "240px",
+          height: "240px",
+          borderRadius: "50%",
           background:
-            "linear-gradient(to bottom, #BEE7FF 0%, #EAF7FF 55%, #F9FDFF 100%)",
+            "radial-gradient(circle, rgba(255,245,200,0.95) 0%, rgba(255,236,170,0.5) 35%, rgba(255,255,255,0) 75%)",
+          filter: "blur(10px)",
         }}
       />
 
@@ -157,62 +209,295 @@ const CuteCartoonBackground = () => (
           position: "absolute",
           top: "10%",
           left: "8%",
-          width: "170px",
-          height: "60px",
-          background: "white",
-          borderRadius: "50px",
-          opacity: 0.9,
+          width: "180px",
+          height: "64px",
+          background: "rgba(255,255,255,0.78)",
+          borderRadius: "999px",
+          filter: "blur(5px)",
+          animation: "cloudDrift 10s ease-in-out infinite",
         }}
       />
-
       <div
         style={{
           position: "absolute",
           top: "16%",
-          right: "12%",
+          left: "12%",
+          width: "90px",
+          height: "40px",
+          background: "rgba(255,255,255,0.65)",
+          borderRadius: "999px",
+          filter: "blur(4px)",
+          animation: "cloudDrift 11s ease-in-out infinite",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          top: "14%",
+          right: "10%",
           width: "220px",
-          height: "70px",
-          background: "white",
-          borderRadius: "50px",
-          opacity: 0.85,
+          height: "72px",
+          background: "rgba(255,255,255,0.76)",
+          borderRadius: "999px",
+          filter: "blur(5px)",
+          animation: "cloudDrift 12s ease-in-out infinite",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          top: "21%",
+          right: "18%",
+          width: "110px",
+          height: "42px",
+          background: "rgba(255,255,255,0.58)",
+          borderRadius: "999px",
+          filter: "blur(4px)",
+          animation: "cloudDrift 13s ease-in-out infinite",
         }}
       />
 
-      {/* 언덕 */}
+      {/* 뒤쪽 언덕 */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: "26%",
+          left: "-6%",
+          width: "45%",
+          height: "18%",
+          background:
+            "radial-gradient(circle at 50% 50%, #B7DFA1 0%, #93C67E 58%, #79AF69 100%)",
+          borderRadius: "50%",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          bottom: "25%",
+          left: "24%",
+          width: "34%",
+          height: "15%",
+          background:
+            "radial-gradient(circle at 50% 50%, #C5E5A9 0%, #9BCB82 58%, #7FB16D 100%)",
+          borderRadius: "50%",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          bottom: "26%",
+          right: "-6%",
+          width: "47%",
+          height: "19%",
+          background:
+            "radial-gradient(circle at 50% 50%, #BEE2A4 0%, #96C97E 58%, #79AF67 100%)",
+          borderRadius: "50%",
+        }}
+      />
+
+      {/* 앞쪽 큰 언덕 */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: "-5%",
+          left: "-10%",
+          width: "64%",
+          height: "28%",
+          background:
+            "radial-gradient(circle at 50% 45%, #97D470 0%, #71B754 64%, #5B9A45 100%)",
+          borderRadius: "50%",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          bottom: "-7%",
+          right: "-12%",
+          width: "68%",
+          height: "30%",
+          background:
+            "radial-gradient(circle at 50% 45%, #9ED874 0%, #77BC58 64%, #5D9C46 100%)",
+          borderRadius: "50%",
+        }}
+      />
+
+      {/* 바닥 앞부분 덧칠 */}
       <div
         style={{
           position: "absolute",
           bottom: 0,
+          left: 0,
           width: "100%",
-          height: "38%",
-          background: "#8EE29B",
-          borderTopLeftRadius: "40% 15%",
-          borderTopRightRadius: "40% 15%",
+          height: "16%",
+          background:
+            "linear-gradient(to top, rgba(88,148,63,0.9), rgba(105,170,72,0.85), rgba(130,195,92,0.25))",
         }}
       />
 
-      {/* 길 */}
+      {/* 수채화 길 */}
       <div
         style={{
           position: "absolute",
           bottom: "10%",
-          width: "100%",
-          height: "90px",
-          background: "#F5E6C8",
-          borderTop: "5px solid #E2CFA7",
+          left: "7%",
+          width: "86%",
+          height: "86px",
+          background:
+            "linear-gradient(to right, rgba(244,229,197,0.15), rgba(241,222,186,0.97), rgba(246,234,208,0.18))",
+          borderRadius: "999px",
+          transform: "rotate(-2deg)",
+          filter: "blur(1px)",
+          boxShadow: "0 0 24px rgba(255,245,220,0.28)",
         }}
       />
 
-      {/* 점선 */}
+      {/* 길 하이라이트 */}
       <div
         style={{
           position: "absolute",
-          bottom: "14%",
-          width: "100%",
-          height: "6px",
+          bottom: "12.7%",
+          left: "10%",
+          width: "78%",
+          height: "5px",
           background:
-            "repeating-linear-gradient(to right, white 0 28px, transparent 28px 50px)",
-          opacity: 0.9,
+            "repeating-linear-gradient(to right, rgba(255,255,255,0.75) 0 24px, transparent 24px 46px)",
+          opacity: 0.72,
+        }}
+      />
+
+      {/* 잔디 붓터치 */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: "13%",
+          left: "4%",
+          width: "14%",
+          height: "8%",
+          background:
+            "radial-gradient(circle, rgba(120,185,78,0.9) 0%, rgba(120,185,78,0.1) 70%)",
+          filter: "blur(6px)",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          bottom: "12%",
+          right: "6%",
+          width: "16%",
+          height: "9%",
+          background:
+            "radial-gradient(circle, rgba(120,185,78,0.88) 0%, rgba(120,185,78,0.08) 70%)",
+          filter: "blur(6px)",
+        }}
+      />
+
+      {/* 왼쪽 나무들 */}
+      <svg
+        width="170"
+        height="260"
+        viewBox="0 0 170 260"
+        style={{
+          position: "absolute",
+          left: "-5px",
+          bottom: "7%",
+          opacity: 0.96,
+        }}
+      >
+        {/* 줄기 */}
+        <rect x="30" y="125" width="12" height="80" rx="6" fill="#7A5635" />
+        <rect x="68" y="110" width="13" height="92" rx="6" fill="#6D4E2F" />
+        <rect x="112" y="135" width="11" height="74" rx="6" fill="#7A5635" />
+
+        {/* 수관 */}
+        <circle cx="36" cy="112" r="34" fill="#72B85A" />
+        <circle cx="20" cy="120" r="22" fill="#83C96A" />
+        <circle cx="52" cy="122" r="20" fill="#8ACF72" />
+
+        <circle cx="74" cy="96" r="38" fill="#6FB857" />
+        <circle cx="55" cy="108" r="24" fill="#8BCD73" />
+        <circle cx="95" cy="112" r="22" fill="#82C768" />
+
+        <circle cx="118" cy="126" r="28" fill="#6EB554" />
+        <circle cx="102" cy="136" r="18" fill="#88CB70" />
+        <circle cx="133" cy="138" r="16" fill="#92D579" />
+
+        {/* 풀 */}
+        <ellipse cx="40" cy="210" rx="34" ry="16" fill="#5FA14B" />
+        <ellipse cx="90" cy="212" rx="40" ry="17" fill="#6AAF53" />
+        <ellipse cx="126" cy="214" rx="30" ry="14" fill="#5E9E48" />
+      </svg>
+
+      {/* 오른쪽 나무들 */}
+      <svg
+        width="180"
+        height="270"
+        viewBox="0 0 180 270"
+        style={{
+          position: "absolute",
+          right: "-6px",
+          bottom: "6%",
+          opacity: 0.96,
+        }}
+      >
+        {/* 줄기 */}
+        <rect x="40" y="140" width="12" height="78" rx="6" fill="#755131" />
+        <rect x="86" y="118" width="14" height="95" rx="6" fill="#6E4C2F" />
+        <rect x="132" y="136" width="11" height="76" rx="6" fill="#7B5635" />
+
+        {/* 수관 */}
+        <circle cx="46" cy="128" r="30" fill="#74BA5B" />
+        <circle cx="29" cy="136" r="18" fill="#89CD71" />
+        <circle cx="61" cy="138" r="17" fill="#8FD676" />
+
+        <circle cx="93" cy="102" r="40" fill="#6DB455" />
+        <circle cx="72" cy="116" r="23" fill="#89CB72" />
+        <circle cx="116" cy="118" r="22" fill="#82C767" />
+
+        <circle cx="138" cy="126" r="30" fill="#6CB352" />
+        <circle cx="123" cy="139" r="18" fill="#89CC70" />
+        <circle cx="154" cy="140" r="17" fill="#93D97B" />
+
+        {/* 풀 */}
+        <ellipse cx="44" cy="222" rx="34" ry="16" fill="#5FA04A" />
+        <ellipse cx="98" cy="222" rx="42" ry="17" fill="#6AAE54" />
+        <ellipse cx="145" cy="222" rx="30" ry="15" fill="#5E9E48" />
+      </svg>
+
+      {/* 반짝이 */}
+      <div
+        style={{
+          position: "absolute",
+          top: "12%",
+          left: "25%",
+          width: "10px",
+          height: "10px",
+          background: "rgba(255,255,255,0.9)",
+          borderRadius: "50%",
+          animation: "shimmer 3s ease-in-out infinite",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          top: "26%",
+          right: "28%",
+          width: "8px",
+          height: "8px",
+          background: "rgba(255,255,255,0.85)",
+          borderRadius: "50%",
+          animation: "shimmer 4s ease-in-out infinite",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          top: "18%",
+          right: "38%",
+          width: "6px",
+          height: "6px",
+          background: "rgba(255,255,255,0.9)",
+          borderRadius: "50%",
+          animation: "shimmer 3.5s ease-in-out infinite",
         }}
       />
 
@@ -221,52 +506,65 @@ const CuteCartoonBackground = () => (
         style={{
           position: "absolute",
           bottom: "13%",
-          animation: "moveRight 24s linear infinite",
+          animation: "moveRightSoft 26s linear infinite",
         }}
       >
         <svg
-          width="140"
-          height="140"
-          viewBox="0 0 140 140"
-          style={{ animation: "floaty 2s ease-in-out infinite" }}
+          width="145"
+          height="145"
+          viewBox="0 0 145 145"
+          style={{
+            animation: "floatSoft 2.3s ease-in-out infinite",
+            filter: "drop-shadow(0 8px 10px rgba(70,90,70,0.18))",
+          }}
         >
-          {/* 바퀴 */}
-          <circle cx="50" cy="95" r="28" fill="#2D3748" />
-          <circle cx="50" cy="95" r="18" fill="#7DD3FC" />
+          <circle
+            cx="52"
+            cy="98"
+            r="30"
+            fill="#3B4754"
+            style={{ transformOrigin: "52px 98px", animation: "wheelSpin 2s linear infinite" }}
+          />
+          <circle cx="52" cy="98" r="20" fill="#B4E0F5" />
+          <circle cx="52" cy="98" r="6" fill="#F8FDFF" />
 
-          <circle cx="100" cy="108" r="11" fill="#2D3748" />
-          <circle cx="100" cy="108" r="5" fill="#CBD5E1" />
+          <circle
+            cx="104"
+            cy="111"
+            r="12"
+            fill="#3B4754"
+            style={{ transformOrigin: "104px 111px", animation: "wheelSpin 1.6s linear infinite" }}
+          />
+          <circle cx="104" cy="111" r="5" fill="#EAF7FF" />
 
-          {/* 몸체 */}
           <path
-            d="M58 45 L58 82 L92 82"
-            stroke="#4B5563"
+            d="M60 47 L60 84 L94 84"
+            stroke="#687585"
             strokeWidth="8"
             strokeLinecap="round"
             fill="none"
           />
 
-          {/* 사람 */}
-          <circle cx="62" cy="28" r="12" fill="#FFD6B3" />
+          <circle cx="64" cy="30" r="12" fill="#FFD9BD" />
 
           <path
-            d="M58 42 Q75 48 82 68"
-            stroke="#7C3AED"
-            strokeWidth="10"
+            d="M60 44 Q76 50 84 70"
+            stroke="#AFA2F5"
+            strokeWidth="11"
             strokeLinecap="round"
             fill="none"
           />
 
           <path
-            d="M78 68 L93 98"
-            stroke="#374151"
+            d="M80 70 L96 101"
+            stroke="#56606D"
             strokeWidth="8"
             strokeLinecap="round"
           />
 
           <path
-            d="M62 54 L88 58"
-            stroke="#374151"
+            d="M64 57 L91 61"
+            stroke="#56606D"
             strokeWidth="8"
             strokeLinecap="round"
           />
@@ -278,40 +576,64 @@ const CuteCartoonBackground = () => (
         style={{
           position: "absolute",
           bottom: "14%",
-          animation: "moveLeft 30s linear infinite",
+          animation: "moveLeftSoft 31s linear infinite",
         }}
       >
         <svg
-          width="170"
-          height="140"
-          viewBox="0 0 170 140"
-          style={{ animation: "floaty 2.5s ease-in-out infinite" }}
+          width="175"
+          height="145"
+          viewBox="0 0 175 145"
+          style={{
+            animation: "floatSoft 2.6s ease-in-out infinite",
+            filter: "drop-shadow(0 8px 10px rgba(70,90,70,0.15))",
+          }}
         >
-          <circle cx="60" cy="105" r="14" fill="#374151" />
-          <circle cx="115" cy="105" r="14" fill="#374151" />
+          <circle
+            cx="60"
+            cy="108"
+            r="14"
+            fill="#475569"
+            style={{ transformOrigin: "60px 108px", animation: "wheelSpin 2s linear infinite" }}
+          />
+          <circle cx="60" cy="108" r="6" fill="#F8FAFC" />
+
+          <circle
+            cx="118"
+            cy="108"
+            r="14"
+            fill="#475569"
+            style={{ transformOrigin: "118px 108px", animation: "wheelSpin 2s linear infinite" }}
+          />
+          <circle cx="118" cy="108" r="6" fill="#F8FAFC" />
 
           <path
-            d="M45 48 Q95 15 125 55 L120 82 L55 82 Z"
-            fill="#F9A8D4"
+            d="M44 50 Q95 14 129 57 L123 84 L55 84 Z"
+            fill="#F7B0D0"
           />
 
           <path
-            d="M118 82 L145 28"
-            stroke="#4B5563"
+            d="M120 84 L150 28"
+            stroke="#64748B"
             strokeWidth="7"
             strokeLinecap="round"
           />
 
-          <circle cx="82" cy="58" r="10" fill="#FFE4C7" />
-
-          <circle cx="77" cy="55" r="2" fill="#333" />
-          <circle cx="87" cy="55" r="2" fill="#333" />
+          <circle cx="84" cy="60" r="11" fill="#FFE7CC" />
+          <circle cx="79" cy="57" r="2" fill="#334155" />
+          <circle cx="89" cy="57" r="2" fill="#334155" />
 
           <path
-            d="M78 62 Q82 66 86 62"
-            stroke="#333"
+            d="M80 64 Q84 68 88 64"
+            stroke="#334155"
             strokeWidth="2"
             fill="none"
+            strokeLinecap="round"
+          />
+
+          <path
+            d="M50 85 L128 85"
+            stroke="rgba(255,255,255,0.72)"
+            strokeWidth="4"
             strokeLinecap="round"
           />
         </svg>
@@ -322,104 +644,143 @@ const CuteCartoonBackground = () => (
         style={{
           position: "absolute",
           bottom: "12%",
-          animation: "moveRight 34s linear infinite",
+          animation: "moveRightSoft 38s linear infinite",
         }}
       >
         <svg
-          width="110"
-          height="130"
-          viewBox="0 0 110 130"
-          style={{ animation: "floaty 1.8s ease-in-out infinite" }}
+          width="115"
+          height="135"
+          viewBox="0 0 115 135"
+          style={{
+            animation: "floatSoft 2s ease-in-out infinite",
+            filter: "drop-shadow(0 8px 10px rgba(70,90,70,0.14))",
+          }}
         >
           <rect
-            x="28"
-            y="30"
-            width="52"
-            height="70"
-            rx="16"
-            fill="#A78BFA"
+            x="30"
+            y="32"
+            width="54"
+            height="72"
+            rx="17"
+            fill="#B59AF6"
           />
 
           <rect
-            x="38"
-            y="42"
+            x="41"
+            y="45"
             width="32"
             height="36"
             rx="8"
-            fill="#C4B5FD"
+            fill="#DDD7FE"
           />
 
           <path
-            d="M42 28 L42 10 L66 10 L66 28"
-            stroke="#4B5563"
+            d="M44 30 L44 12 L69 12 L69 30"
+            stroke="#64748B"
             strokeWidth="6"
             fill="none"
             strokeLinecap="round"
           />
 
-          <circle cx="40" cy="105" r="6" fill="#374151" />
-          <circle cx="68" cy="105" r="6" fill="#374151" />
+          <circle
+            cx="43"
+            cy="109"
+            r="6"
+            fill="#475569"
+            style={{ transformOrigin: "43px 109px", animation: "wheelSpin 1.6s linear infinite" }}
+          />
+          <circle
+            cx="72"
+            cy="109"
+            r="6"
+            fill="#475569"
+            style={{ transformOrigin: "72px 109px", animation: "wheelSpin 1.6s linear infinite" }}
+          />
+
+          <path
+            d="M47 52 L68 52"
+            stroke="rgba(255,255,255,0.65)"
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
+          <path
+            d="M47 63 L68 63"
+            stroke="rgba(255,255,255,0.45)"
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
         </svg>
       </div>
 
-      {/* 동물 카트 */}
+      {/* 반려동물 카트 */}
       <div
         style={{
           position: "absolute",
           bottom: "15%",
-          animation: "moveLeft 38s linear infinite",
+          animation: "moveLeftSoft 42s linear infinite",
         }}
       >
         <svg
-          width="180"
-          height="140"
-          viewBox="0 0 180 140"
-          style={{ animation: "floaty 2.2s ease-in-out infinite" }}
+          width="185"
+          height="145"
+          viewBox="0 0 185 145"
+          style={{
+            animation: "floatSoft 2.4s ease-in-out infinite",
+            filter: "drop-shadow(0 8px 10px rgba(70,90,70,0.14))",
+          }}
         >
-          {/* 카트 */}
           <rect
-            x="35"
-            y="55"
-            width="90"
+            x="36"
+            y="58"
+            width="92"
             height="45"
-            rx="16"
-            fill="#60A5FA"
+            rx="17"
+            fill="#78B7FA"
           />
 
-          {/* 손잡이 */}
           <path
-            d="M120 58 L150 20"
-            stroke="#475569"
+            d="M123 60 L154 22"
+            stroke="#64748B"
             strokeWidth="6"
             strokeLinecap="round"
           />
 
-          {/* 바퀴 */}
-          <circle cx="55" cy="108" r="12" fill="#334155" />
-          <circle cx="105" cy="108" r="12" fill="#334155" />
+          <circle
+            cx="57"
+            cy="111"
+            r="12"
+            fill="#475569"
+            style={{ transformOrigin: "57px 111px", animation: "wheelSpin 2s linear infinite" }}
+          />
+          <circle cx="57" cy="111" r="5" fill="#EFF6FF" />
 
-          {/* 강아지 */}
-          <circle cx="68" cy="48" r="16" fill="#F5CBA7" />
-          <ellipse cx="58" cy="40" rx="7" ry="12" fill="#D98880" />
-          <ellipse cx="78" cy="40" rx="7" ry="12" fill="#D98880" />
+          <circle
+            cx="108"
+            cy="111"
+            r="12"
+            fill="#475569"
+            style={{ transformOrigin: "108px 111px", animation: "wheelSpin 2s linear infinite" }}
+          />
+          <circle cx="108" cy="111" r="5" fill="#EFF6FF" />
 
-          <circle cx="63" cy="48" r="2" fill="#222" />
-          <circle cx="73" cy="48" r="2" fill="#222" />
+          <circle cx="70" cy="50" r="16" fill="#F5CBA7" />
+          <ellipse cx="60" cy="42" rx="7" ry="12" fill="#D98880" />
+          <ellipse cx="80" cy="42" rx="7" ry="12" fill="#D98880" />
 
-          <circle cx="68" cy="55" r="3" fill="#222" />
+          <circle cx="65" cy="50" r="2" fill="#334155" />
+          <circle cx="75" cy="50" r="2" fill="#334155" />
+          <circle cx="70" cy="57" r="3" fill="#334155" />
 
-          {/* 고양이 */}
-          <circle cx="98" cy="50" r="13" fill="#FFF7AE" />
+          <circle cx="101" cy="52" r="13" fill="#FFF7AE" />
+          <polygon points="91,43 95,33 101,43" fill="#FACC15" />
+          <polygon points="111,43 107,33 101,43" fill="#FACC15" />
 
-          <polygon points="88,40 92,30 98,40" fill="#FACC15" />
-          <polygon points="108,40 104,30 98,40" fill="#FACC15" />
-
-          <circle cx="94" cy="49" r="2" fill="#222" />
-          <circle cx="102" cy="49" r="2" fill="#222" />
+          <circle cx="97" cy="51" r="2" fill="#334155" />
+          <circle cx="105" cy="51" r="2" fill="#334155" />
 
           <path
-            d="M94 56 Q98 59 102 56"
-            stroke="#222"
+            d="M97 58 Q101 61 105 58"
+            stroke="#334155"
             strokeWidth="2"
             fill="none"
             strokeLinecap="round"
@@ -1398,6 +1759,57 @@ useEffect(() => {
     }
   };
 }, [isSurveying]);
+const goHomeClean = () => {
+  if (animationRef.current) {
+    cancelAnimationFrame(animationRef.current);
+  }
+
+  setTempMarker(null);
+  setSearchSuggestions([]);
+  setStartSuggestions([]);
+  setEndSuggestions([]);
+  resetRoute();
+  setCurrentView("home");
+};
+
+const handleBackHome = () => {
+  if (currentView !== "home") {
+    window.history.back();
+  } else {
+    goHomeClean();
+  }
+};
+
+const openSearchView = () => {
+  resetRoute();
+  setCurrentView("search");
+  window.history.pushState({ view: "search" }, "", "#search");
+};
+
+const openCreateView = () => {
+  setCurrentView("create");
+  window.history.pushState({ view: "create" }, "", "#create");
+};
+useEffect(() => {
+  window.history.replaceState({ view: "home" }, "", "#home");
+
+  const handlePhoneBackButton = (event) => {
+    const view = event.state?.view || "home";
+
+    if (view === "home") {
+      goHomeClean();
+      return;
+    }
+
+    setCurrentView(view);
+  };
+
+  window.addEventListener("popstate", handlePhoneBackButton);
+
+  return () => {
+    window.removeEventListener("popstate", handlePhoneBackButton);
+  };
+}, []);
 const saveSurveyTrack = async () => {
   if (surveyTrack.length < 2) {
     alert("저장할 조사 경로가 없습니다.");
@@ -1442,84 +1854,125 @@ useEffect(() => {
   return () => unsubscribe();
 }, []);
 const renderHeader = () => (
-  <div style={{
-    position: "fixed", top: 0, left: 0, width: "100%", height: "60px",
-    background: "#fff", zIndex: 2000, display: "flex",
-    justifyContent: "space-between", alignItems: "center",
-    padding: "0 10px", boxSizing: "border-box", borderBottom: "1px solid #eee"
-  }}>
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", width: isMobile ? "95px" : "150px", height: "50px", position: "relative", flexShrink: 0 }}>
-      <button onClick={() => setCurrentView("home")} style={{ all: "unset", width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "flex-start", cursor: "pointer", position: "relative", zIndex: 2 }}>
-        <div style={{ transform: isMobile ? "scale(0.24)" : "scale(0.40)", transformOrigin: "left center", pointerEvents: "none", marginLeft: isMobile ? "-14px" : "-6px" }}>
-          <SimpleTextLogo />
-        </div>
-      </button>
-    </div>
-    
-    <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+  <div
+    style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "60px",
+      background: "rgba(255,255,255,0.96)",
+      zIndex: 2000,
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "0 10px",
+      boxSizing: "border-box",
+      borderBottom: "1px solid #E5E7EB",
+      backdropFilter: "blur(10px)",
+    }}
+  >
+   {/* 왼쪽: 로고 */}
+<div
+  style={{
+    display: "flex",
+    alignItems: "center",
+    height: "50px",
+    flexShrink: 0,
+  }}
+>
   <button
     onClick={() => {
-      setCurrentView("search");
-      resetRoute();
+      goHomeClean();
+      window.history.replaceState({ view: "home" }, "", "#home");
     }}
     style={{
-      padding: "8px",
-      border: "none",
-      borderRadius: "8px",
-      background: "#F5F5F7"
+      all: "unset",
+      width: isMobile ? "74px" : "105px",
+      height: "48px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "flex-start",
+      cursor: "pointer",
+      position: "relative",
     }}
   >
-    🗺️
-  </button>
-
-  <button
-    onClick={() => setCurrentView("create")}
-    style={{
-      padding: "8px",
-      border: "none",
-      borderRadius: "8px",
-      background: "#F5F5F7"
-    }}
-  >
-    ✍️
-  </button>
-
-  {isAdminLoggedIn && (
-    <button
-      onClick={downloadBfMarkersBackup}
+    <div
       style={{
-        padding: "8px 10px",
-        border: "none",
-        borderRadius: "8px",
-        background: "#DCFCE7",
-        color: "#166534",
-        fontSize: "12px",
-        fontWeight: "700",
-        cursor: "pointer"
+        transform: isMobile ? "scale(0.2)" : "scale(0.28)",
+        transformOrigin: "left center",
+        pointerEvents: "none",
+        marginLeft: isMobile ? "-18px" : "-10px",
       }}
     >
-      백업
-    </button>
-  )}
-
-  {isAdminLoggedIn && (
-    <button
-      onClick={handleLogout}
-      style={{
-        padding: "8px 10px",
-        border: "none",
-        borderRadius: "8px",
-        background: "#FEE2E2",
-        color: "#DC2626",
-        fontSize: "12px",
-        fontWeight: "700",
-        cursor: "pointer"
-      }}
-    >
-      로그아웃
-    </button>
-  )}
+      <SimpleTextLogo />
+    </div>
+  </button>
 </div>
+    {/* 오른쪽: 메뉴 버튼 */}
+    <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+      <button
+        onClick={openSearchView}
+        style={{
+          padding: "8px",
+          border: "none",
+          borderRadius: "8px",
+          background: "#F5F5F7",
+          cursor: "pointer",
+        }}
+      >
+        🗺️
+      </button>
+
+      <button
+        onClick={openCreateView}
+        style={{
+          padding: "8px",
+          border: "none",
+          borderRadius: "8px",
+          background: "#F5F5F7",
+          cursor: "pointer",
+        }}
+      >
+        ✍️
+      </button>
+
+      {isAdminLoggedIn && (
+        <button
+          onClick={downloadBfMarkersBackup}
+          style={{
+            padding: "8px 10px",
+            border: "none",
+            borderRadius: "8px",
+            background: "#DCFCE7",
+            color: "#166534",
+            fontSize: "12px",
+            fontWeight: "700",
+            cursor: "pointer",
+          }}
+        >
+          백업
+        </button>
+      )}
+
+      {isAdminLoggedIn && (
+        <button
+          onClick={handleLogout}
+          style={{
+            padding: "8px 10px",
+            border: "none",
+            borderRadius: "8px",
+            background: "#FEE2E2",
+            color: "#DC2626",
+            fontSize: "12px",
+            fontWeight: "700",
+            cursor: "pointer",
+          }}
+        >
+          로그아웃
+        </button>
+      )}
+    </div>
   </div>
 );
 
@@ -1561,194 +2014,387 @@ return (
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
-      justifyContent: isMobile ? "flex-start" : "center",
-      padding: isMobile ? "10px 16px 30px" : "40px 20px",
+      justifyContent: "center",
+      padding: isMobile ? "18px 18px 34px" : "40px 20px",
       position: "relative",
       boxSizing: "border-box",
       width: "100%",
+      minHeight: "100vh",
       overflow: "hidden",
     }}
   >
     <CuteCartoonBackground />
 
-    {/* 메인 콘텐츠 */}
-<div
-  style={{
-    position: "relative",
-    zIndex: 2,
-    textAlign: "center",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    width: "100%",
-    maxWidth: "380px",
-
-    /* 추가 */
-    transform: isMobile
-      ? "translateY(-70px)"
-      : "translateY(-30px)",
-  }}
->
-      
-      {/* 로고 */}
-<div
-  style={{
-    transform: isMobile ? "scale(0.64)" : "scale(0.9)",
-    marginBottom: isMobile ? "-200px" : "-55px",
-    marginTop: isMobile ? "-78px" : "-40px",
-  }}
->
-  <SimpleTextLogo />
-</div>
-
-      {/* 문구 */}
+    <div
+      style={{
+        position: "relative",
+        zIndex: 2,
+        width: "100%",
+        maxWidth: isMobile ? "370px" : "430px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        textAlign: "center",
+        transform: isMobile ? "translateY(-34px)" : "translateY(-18px)",
+      }}
+    >
       <div
         style={{
-         marginBottom: isMobile ? "10px" : "20px",
+          transform: isMobile ? "scale(0.72)" : "scale(0.92)",
+          marginTop: isMobile ? "-88px" : "-48px",
+          marginBottom: isMobile ? "-166px" : "-70px",
+          filter: "drop-shadow(0 8px 14px rgba(30, 80, 120, 0.12))",
+        }}
+      >
+        <SimpleTextLogo />
+      </div>
+
+      <div
+        style={{
+          background: "rgba(255,255,255,0.68)",
+          border: "1.5px solid rgba(255,255,255,0.85)",
+          boxShadow: "0 12px 28px rgba(72, 117, 92, 0.12)",
+          backdropFilter: "blur(10px)",
+          borderRadius: "999px",
+          padding: isMobile ? "10px 18px" : "12px 24px",
+          marginBottom: isMobile ? "18px" : "22px",
         }}
       >
         <div
           style={{
-            fontSize: isMobile ? "15px" : "18px",
+            fontSize: isMobile ? "14px" : "16px",
             color: "#1976D2",
-            fontWeight: "800",
-            marginBottom: "1px",
-            letterSpacing: "0.3px",
+            fontWeight: "900",
+            letterSpacing: "0.2px",
+            marginBottom: "2px",
           }}
         >
-          "모든 길은 모두를 위해"
+          모든 길은 모두를 위해
         </div>
 
-        <p
+        <div
           style={{
-            color: "#222",
-            fontSize: isMobile ? "16px" : "22px",
-            margin: 0,
-            fontWeight: "700",
+            fontSize: isMobile ? "15px" : "18px",
+            color: "#1F2937",
+            fontWeight: "800",
             lineHeight: "1.35",
-            letterSpacing: "-0.5px",
             wordBreak: "keep-all",
           }}
         >
           함께 만드는 우리 동네 무장애 생활지도
-        </p>
+        </div>
       </div>
 
-      {/* 버튼 세트 */}
       <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: isMobile ? "12px" : "18px",
-          width: "100%",
-        }}
-      >
-
-        {/* 안전 길찾기 */}
-        <div
-          onClick={() => {
-            setCurrentView("search");
-            resetRoute();
-          }}
-          style={{
-            background: "rgba(255,255,255,0.92)",
-            borderRadius: "28px",
-            padding: isMobile ? "20px 18px" : "26px 22px",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
-            border: "2px solid #EBF1F6",
-            cursor: "pointer",
-            transition: "0.2s",
-            backdropFilter: "blur(4px)",
-          }}
-        >
-          <div style={{ fontSize: "36px", marginBottom: "8px" }}>🗺️</div>
-
-          <h3
-            style={{
-              fontSize: isMobile ? "18px" : "20px",
-              margin: "0 0 6px 0",
-              fontWeight: "800",
-              color: "#222",
-            }}
-          >
-            안전 길찾기
-          </h3>
-
-          <p
-            style={{
-              color: "#555",
-              fontSize: isMobile ? "12px" : "13px",
-              margin: 0,
-              lineHeight: "1.5",
-            }}
-          >
-            바퀴가 구르기 편한 길과
-            <br />
-            위험 장애물을 미리 확인해요.
-          </p>
-        </div>
-
-        {/* 주민 제보 */}
-        <div
-          onClick={() => setCurrentView("create")}
-          style={{
-            background: "rgba(255,255,255,0.92)",
-            borderRadius: "28px",
-            padding: isMobile ? "20px 18px" : "26px 22px",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
-            border: "2px solid #EBF1F6",
-            cursor: "pointer",
-            transition: "0.2s",
-            backdropFilter: "blur(4px)",
-          }}
-        >
-          <div style={{ fontSize: "36px", marginBottom: "8px" }}>✍️</div>
-
-          <h3
-            style={{
-              fontSize: isMobile ? "18px" : "20px",
-              margin: "0 0 6px 0",
-              fontWeight: "800",
-              color: "#222",
-            }}
-          >
-            주민 제보
-          </h3>
-
-          <p
-            style={{
-              color: "#555",
-              fontSize: isMobile ? "12px" : "13px",
-              margin: 0,
-              lineHeight: "1.5",
-            }}
-          >
-            골목길의 계단, 턱, 보도 파손을
-            <br />
-            직접 지도에 등록하고 제보해요.
-          </p>
-        </div>
-
-       
-      </div>
-      {/* 🚪 5번 클릭 비밀 문 */}
-<footer 
-  onClick={handleSecretDoorClick} 
-  style={{ 
-    marginTop: "40px", 
-    fontSize: "11px", 
-    color: "rgba(0,0,0,0.3)", 
-    cursor: "pointer", 
-    userSelect: "none" 
+  style={{
+    display: "flex",
+    flexDirection: "column",
+    gap: isMobile ? "15px" : "18px",
+    width: "100%",
   }}
 >
-  © 2026 Wheel the World. 
-</footer>
+  <button
+    onClick={openSearchView}
+    style={{
+      width: "100%",
+      border: "none",
+      borderRadius: "30px",
+      padding: isMobile ? "18px 18px" : "22px 22px",
+      background:
+        "linear-gradient(145deg, rgba(255,255,255,0.96), rgba(219,234,254,0.96))",
+      boxShadow:
+        "0 10px 0 rgba(147,197,253,0.5), 0 18px 34px rgba(30,64,175,0.16)",
+      cursor: "pointer",
+      transition: "all 0.18s ease",
+      textAlign: "left",
+      display: "flex",
+      alignItems: "center",
+      gap: "16px",
+      position: "relative",
+      overflow: "hidden",
+    }}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.transform = "translateY(-3px)";
+      e.currentTarget.style.boxShadow =
+        "0 13px 0 rgba(147,197,253,0.5), 0 22px 38px rgba(30,64,175,0.2)";
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.transform = "translateY(0px)";
+      e.currentTarget.style.boxShadow =
+        "0 10px 0 rgba(147,197,253,0.5), 0 18px 34px rgba(30,64,175,0.16)";
+    }}
+  >
+    <div
+      style={{
+        position: "absolute",
+        top: "-35px",
+        right: "-32px",
+        width: "105px",
+        height: "105px",
+        borderRadius: "50%",
+        background: "rgba(147,197,253,0.25)",
+      }}
+    />
+
+    <div
+      style={{
+        position: "absolute",
+        bottom: "-24px",
+        left: "35%",
+        width: "120px",
+        height: "48px",
+        borderRadius: "50%",
+        background: "rgba(255,255,255,0.45)",
+      }}
+    />
+
+    <div
+      style={{
+        width: isMobile ? "58px" : "64px",
+        height: isMobile ? "58px" : "64px",
+        borderRadius: "24px",
+        background: "linear-gradient(135deg, #60A5FA, #2563EB)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: isMobile ? "29px" : "32px",
+        flexShrink: 0,
+        boxShadow:
+          "inset 0 0 0 2px rgba(255,255,255,0.45), 0 8px 16px rgba(37,99,235,0.25)",
+        position: "relative",
+        zIndex: 1,
+      }}
+    >
+      🗺️
+    </div>
+
+    <div style={{ position: "relative", zIndex: 1, flex: 1 }}>
+      <div
+        style={{
+          display: "inline-block",
+          background: "rgba(219,234,254,0.95)",
+          color: "#1D4ED8",
+          fontSize: "10.5px",
+          fontWeight: "900",
+          padding: "4px 9px",
+          borderRadius: "999px",
+          marginBottom: "7px",
+          letterSpacing: "-0.2px",
+        }}
+      >
+        바퀴가 편한 길 찾기
+      </div>
+
+      <div
+        style={{
+          fontSize: isMobile ? "19px" : "21px",
+          fontWeight: "950",
+          color: "#1E3A8A",
+          marginBottom: "5px",
+          letterSpacing: "-0.5px",
+        }}
+      >
+        안전 길찾기
+      </div>
+
+      <div
+        style={{
+          fontSize: isMobile ? "12.5px" : "13.5px",
+          color: "#475569",
+          lineHeight: "1.45",
+          fontWeight: "650",
+          wordBreak: "keep-all",
+        }}
+      >
+        단차, 경사, 장애물을 확인하고
+        <br />
+        더 편한 경로를 찾아요.
+      </div>
+    </div>
+
+    <div
+      style={{
+        position: "relative",
+        zIndex: 1,
+        width: "32px",
+        height: "32px",
+        borderRadius: "50%",
+        background: "rgba(255,255,255,0.95)",
+        color: "#2563EB",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "20px",
+        fontWeight: "900",
+        boxShadow: "0 4px 10px rgba(37,99,235,0.18)",
+        flexShrink: 0,
+      }}
+    >
+      ›
+    </div>
+  </button>
+
+  <button
+    onClick={openCreateView}
+    style={{
+      width: "100%",
+      border: "none",
+      borderRadius: "30px",
+      padding: isMobile ? "18px 18px" : "22px 22px",
+      background:
+        "linear-gradient(145deg, rgba(255,255,255,0.96), rgba(209,250,229,0.96))",
+      boxShadow:
+        "0 10px 0 rgba(110,231,183,0.5), 0 18px 34px rgba(6,95,70,0.14)",
+      cursor: "pointer",
+      transition: "all 0.18s ease",
+      textAlign: "left",
+      display: "flex",
+      alignItems: "center",
+      gap: "16px",
+      position: "relative",
+      overflow: "hidden",
+    }}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.transform = "translateY(-3px)";
+      e.currentTarget.style.boxShadow =
+        "0 13px 0 rgba(110,231,183,0.5), 0 22px 38px rgba(6,95,70,0.18)";
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.transform = "translateY(0px)";
+      e.currentTarget.style.boxShadow =
+        "0 10px 0 rgba(110,231,183,0.5), 0 18px 34px rgba(6,95,70,0.14)";
+    }}
+  >
+    <div
+      style={{
+        position: "absolute",
+        top: "-35px",
+        right: "-32px",
+        width: "105px",
+        height: "105px",
+        borderRadius: "50%",
+        background: "rgba(110,231,183,0.25)",
+      }}
+    />
+
+    <div
+      style={{
+        position: "absolute",
+        bottom: "-24px",
+        left: "35%",
+        width: "120px",
+        height: "48px",
+        borderRadius: "50%",
+        background: "rgba(255,255,255,0.45)",
+      }}
+    />
+
+    <div
+      style={{
+        width: isMobile ? "58px" : "64px",
+        height: isMobile ? "58px" : "64px",
+        borderRadius: "24px",
+        background: "linear-gradient(135deg, #34D399, #059669)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: isMobile ? "29px" : "32px",
+        flexShrink: 0,
+        boxShadow:
+          "inset 0 0 0 2px rgba(255,255,255,0.45), 0 8px 16px rgba(5,150,105,0.22)",
+        position: "relative",
+        zIndex: 1,
+      }}
+    >
+      ✍️
+    </div>
+
+    <div style={{ position: "relative", zIndex: 1, flex: 1 }}>
+      <div
+        style={{
+          display: "inline-block",
+          background: "rgba(209,250,229,0.95)",
+          color: "#047857",
+          fontSize: "10.5px",
+          fontWeight: "900",
+          padding: "4px 9px",
+          borderRadius: "999px",
+          marginBottom: "7px",
+          letterSpacing: "-0.2px",
+        }}
+      >
+        우리 동네 길 정보 모으기
+      </div>
+
+      <div
+        style={{
+          fontSize: isMobile ? "19px" : "21px",
+          fontWeight: "950",
+          color: "#065F46",
+          marginBottom: "5px",
+          letterSpacing: "-0.5px",
+        }}
+      >
+        주민 제보
+      </div>
+
+      <div
+        style={{
+          fontSize: isMobile ? "12.5px" : "13.5px",
+          color: "#475569",
+          lineHeight: "1.45",
+          fontWeight: "650",
+          wordBreak: "keep-all",
+        }}
+      >
+        턱, 계단, 보도 파손을
+        <br />
+        지도에 직접 남겨요.
+      </div>
+    </div>
+
+    <div
+      style={{
+        position: "relative",
+        zIndex: 1,
+        width: "32px",
+        height: "32px",
+        borderRadius: "50%",
+        background: "rgba(255,255,255,0.95)",
+        color: "#059669",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "20px",
+        fontWeight: "900",
+        boxShadow: "0 4px 10px rgba(5,150,105,0.16)",
+        flexShrink: 0,
+      }}
+    >
+      ›
+    </div>
+  </button>
+</div>
+
+      <footer
+        onClick={handleSecretDoorClick}
+        style={{
+          marginTop: isMobile ? "28px" : "34px",
+          fontSize: "11px",
+          color: "rgba(31,41,55,0.42)",
+          cursor: "pointer",
+          userSelect: "none",
+          background: "rgba(255,255,255,0.38)",
+          padding: "6px 12px",
+          borderRadius: "999px",
+          backdropFilter: "blur(6px)",
+        }}
+      >
+        © 2026 Wheel the World.
+      </footer>
     </div>
   </div>
-  
 )}
-
       {/* 2. 안전 길찾기 화면 */}
       {currentView === "search" && (
         <div style={{ 
