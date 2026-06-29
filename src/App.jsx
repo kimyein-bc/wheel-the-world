@@ -24,12 +24,14 @@ import {
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import DaumPostcode from 'react-daum-postcode';
+const KAKAO_JS_KEY = "5454d531ca3f6412ccc87ecd7f44eeee";
+
 async function getCoords(place) {
   const res = await fetch(
     `https://nominatim.openstreetmap.org/search?format=json&q=${place}`
   );
 
-  
+
 
   const data = await res.json();
 
@@ -101,6 +103,132 @@ function MoveMapToRoute({ route }) {
 
   return null;
 }
+const loadKakaoMapScript = () => {
+  return new Promise((resolve, reject) => {
+    if (!KAKAO_JS_KEY || KAKAO_JS_KEY === "여기에_진짜_JavaScript_키") {
+      reject(new Error("KAKAO_JS_KEY가 비어 있거나 예시 문구 그대로입니다."));
+      return;
+    }
+
+    if (KAKAO_JS_KEY.includes("KakaoAK")) {
+      reject(new Error("REST API 키를 넣은 것 같습니다. JavaScript 키를 넣어야 합니다."));
+      return;
+    }
+
+    if (KAKAO_JS_KEY === "Default JS Key") {
+      reject(new Error("'Default JS Key'는 키 이름입니다. 실제 JavaScript 키 값을 넣어야 합니다."));
+      return;
+    }
+
+    if (window.kakao && window.kakao.maps) {
+      window.kakao.maps.load(() => {
+        resolve(window.kakao);
+      });
+      return;
+    }
+
+    const existingScript = document.getElementById("kakao-map-script");
+
+    if (existingScript) {
+      existingScript.remove();
+    }
+
+    const script = document.createElement("script");
+    script.id = "kakao-map-script";
+    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_JS_KEY}&libraries=services&autoload=false`;
+    script.async = true;
+
+    console.log("카카오 지도 스크립트 URL:", script.src);
+
+    script.onload = () => {
+      console.log("카카오 지도 스크립트 로드 완료");
+
+      if (!window.kakao || !window.kakao.maps) {
+        reject(
+          new Error(
+            "스크립트는 불러왔지만 window.kakao.maps가 없습니다. JavaScript 키, 카카오맵 API 활성화, 도메인 등록을 확인하세요."
+          )
+        );
+        return;
+      }
+
+      window.kakao.maps.load(() => {
+        resolve(window.kakao);
+      });
+    };
+
+    script.onerror = () => {
+      reject(
+        new Error(
+          "카카오 지도 스크립트 자체를 불러오지 못했습니다. JavaScript 키 또는 도메인 등록 문제일 가능성이 큽니다."
+        )
+      );
+    };
+
+    document.head.appendChild(script);
+  });
+};
+
+const KakaoMapTest = () => {
+  const mapDivRef = useRef(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    loadKakaoMapScript()
+      .then((kakao) => {
+        if (!isMounted || !mapDivRef.current) return;
+
+        const center = new kakao.maps.LatLng(37.6345, 126.832);
+
+        const map = new kakao.maps.Map(mapDivRef.current, {
+          center,
+          level: 4,
+        });
+
+        const marker = new kakao.maps.Marker({
+          map,
+          position: center,
+        });
+
+        const infoWindow = new kakao.maps.InfoWindow({
+          content:
+            '<div style="padding:8px 10px;font-size:13px;font-weight:700;white-space:nowrap;">화정역 카카오 지도 테스트</div>',
+        });
+
+        infoWindow.open(map, marker);
+
+        const zoomControl = new kakao.maps.ZoomControl();
+        map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
+
+        const mapTypeControl = new kakao.maps.MapTypeControl();
+        map.addControl(mapTypeControl, kakao.maps.ControlPosition.TOPRIGHT);
+      })
+      .catch((error) => {
+  console.error("카카오 지도 진짜 에러:", error);
+
+  alert(
+    `카카오 지도 실패: ${
+      error?.message || "원인을 알 수 없습니다. F12 Console을 확인해 주세요."
+    }`
+  );
+});
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  return (
+    <div
+      ref={mapDivRef}
+      style={{
+        width: "100%",
+        height: "100%",
+      }}
+    />
+  );
+};
 const CuteCartoonBackground = () => (
   <>
     <style>{`
@@ -2375,7 +2503,26 @@ return (
     </div>
   </button>
 </div>
-
+<button
+  onClick={() => {
+    setCurrentView("kakaoTest");
+    window.history.pushState({ view: "kakaoTest" }, "", "#kakaoTest");
+  }}
+  style={{
+    marginTop: "16px",
+    border: "none",
+    borderRadius: "999px",
+    padding: "10px 16px",
+    background: "rgba(255, 237, 213, 0.95)",
+    color: "#9A3412",
+    fontSize: "13px",
+    fontWeight: "900",
+    cursor: "pointer",
+    boxShadow: "0 6px 14px rgba(154, 52, 18, 0.12)",
+  }}
+>
+  카카오 지도 테스트
+</button>
       <footer
         onClick={handleSecretDoorClick}
         style={{
@@ -2392,6 +2539,29 @@ return (
       >
         © 2026 Wheel the World.
       </footer>
+    </div>
+  </div>
+)}
+{currentView === "kakaoTest" && (
+  <div
+    style={{
+      flex: 1,
+      width: "100%",
+      height: "100vh",
+      paddingTop: "60px",
+      boxSizing: "border-box",
+      background: "#F8FAFC",
+    }}
+  >
+    {renderHeader()}
+
+    <div
+      style={{
+        width: "100%",
+        height: "calc(100vh - 60px)",
+      }}
+    >
+      <KakaoMapTest />
     </div>
   </div>
 )}
