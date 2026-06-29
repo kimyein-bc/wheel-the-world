@@ -17,7 +17,8 @@ import {
   push,
   onValue,
   update,
-  remove
+  remove,
+  get
 } from "firebase/database";
 
 import L from "leaflet";
@@ -802,28 +803,118 @@ const handleSecretDoorClick = () => {
 const [adminEmailInput, setAdminEmailInput] = useState("");
 const [adminPasswordInput, setAdminPasswordInput] = useState("");
 // 💡 관리자 로그인 처리 함수
-const handleLogin = (e) => {
-  e.preventDefault(); // 페이지 새로고침 방지
+const ADMIN_EMAIL = "wheel0ff@naver.com";
 
-  // 임시 관리자 계정 정보 (원하는 계정으로 변경 가능)
-  const adminEmail = "wheel0ff@naver.com";
-  const adminPassword = "wheelwheel04";
+const handleLogin = async (e) => {
+  e.preventDefault();
 
-  if (adminEmailInput === adminEmail && adminPasswordInput === adminPassword) {
-  alert("관리자 인증에 성공했습니다!");
-  setIsAdminLoggedIn(true);
-  setUserRole("admin"); // 👈 여기에 이 한 줄을 추가하여 권한을 넘겨줍니다.
-  setCurrentView("home");
-    
-    // 입력창 초기화
+  try {
+    const userCredential = await signInWithEmailAndPassword(
+      auth,
+      adminEmailInput,
+      adminPasswordInput
+    );
+
+    if (userCredential.user.email !== ADMIN_EMAIL) {
+      await signOut(auth);
+      alert("관리자 계정이 아닙니다.");
+      return;
+    }
+
+    alert("관리자 인증에 성공했습니다!");
+
+    setIsAdminLoggedIn(true);
+    setUserRole("admin");
+    setCurrentView("home");
+
     setAdminEmailInput("");
     setAdminPasswordInput("");
-  } else {
+  } catch (error) {
+    console.error("관리자 로그인 실패:", error);
     alert("이메일 또는 비밀번호가 일치하지 않습니다.");
+  }
+};
+const handleLogout = async () => {
+  try {
+    await signOut(auth);
+
+    setIsAdminLoggedIn(false);
+    setUserRole("user");
+    setCurrentView("home");
+
+    alert("관리자 로그아웃 되었습니다.");
+  } catch (error) {
+    console.error("로그아웃 실패:", error);
+    alert("로그아웃 중 오류가 발생했습니다.");
+  }
+};
+const downloadBfMarkersBackup = async () => {
+  if (!isAdminLoggedIn) {
+    alert("관리자만 백업할 수 있습니다.");
+    return;
+  }
+
+  try {
+    const snapshot = await get(ref(db, "bfMarkers"));
+    const data = snapshot.val();
+
+    if (!data) {
+      alert("백업할 아이콘 데이터가 없습니다. Firebase의 bfMarkers 경로를 확인해 주세요.");
+      return;
+    }
+
+    const markers = Object.entries(data).map(([id, value]) => ({
+      id,
+      ...value
+    }));
+
+    const backupData = {
+      backedUpAt: new Date().toISOString(),
+      count: markers.length,
+      bfMarkers: markers,
+      rawBfMarkers: data
+    };
+
+    const json = JSON.stringify(backupData, null, 2);
+    const blob = new Blob([json], {
+      type: "application/json"
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    a.href = url;
+    a.download = `wheel-the-world-bfMarkers-backup-${today}.json`;
+
+    document.body.appendChild(a);
+    a.click();
+
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    alert(`${markers.length}개의 아이콘 데이터를 백업했습니다.`);
+  } catch (error) {
+    console.error("백업 실패:", error);
+    alert("백업 중 오류가 발생했습니다. 콘솔을 확인해 주세요.");
   }
 };
 // 💡 관리자 로그인 성공 여부를 저장하는 상태 (기본값은 false)
 const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+useEffect(() => {
+  const unsubscribe = onAuthStateChanged(auth, (user) => {
+    if (user && user.email === ADMIN_EMAIL) {
+      setIsAdminLoggedIn(true);
+      setUserRole("admin");
+    } else {
+      setIsAdminLoggedIn(false);
+      setUserRole("user");
+    }
+  });
+
+  return () => unsubscribe();
+}, []);
 const navigateTo = (view) => {
   setCurrentView(view);
   // 브라우저 주소창 기록에 현재 상태를 추가 (뒤로가기 대비)
@@ -1492,10 +1583,70 @@ const renderHeader = () => (
       </button>
     </div>
     
-    <div style={{ display: "flex", gap: "5px" }}>
-      <button onClick={() => { setCurrentView("search"); resetRoute(); }} style={{ padding: "8px", border: "none", borderRadius: "8px", background: "#F5F5F7" }}>🗺️</button>
-      <button onClick={() => setCurrentView("create")} style={{ padding: "8px", border: "none", borderRadius: "8px", background: "#F5F5F7" }}>✍️</button>
-    </div>
+    <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+  <button
+    onClick={() => {
+      setCurrentView("search");
+      resetRoute();
+    }}
+    style={{
+      padding: "8px",
+      border: "none",
+      borderRadius: "8px",
+      background: "#F5F5F7"
+    }}
+  >
+    🗺️
+  </button>
+
+  <button
+    onClick={() => setCurrentView("create")}
+    style={{
+      padding: "8px",
+      border: "none",
+      borderRadius: "8px",
+      background: "#F5F5F7"
+    }}
+  >
+    ✍️
+  </button>
+
+  {isAdminLoggedIn && (
+    <button
+      onClick={downloadBfMarkersBackup}
+      style={{
+        padding: "8px 10px",
+        border: "none",
+        borderRadius: "8px",
+        background: "#DCFCE7",
+        color: "#166534",
+        fontSize: "12px",
+        fontWeight: "700",
+        cursor: "pointer"
+      }}
+    >
+      백업
+    </button>
+  )}
+
+  {isAdminLoggedIn && (
+    <button
+      onClick={handleLogout}
+      style={{
+        padding: "8px 10px",
+        border: "none",
+        borderRadius: "8px",
+        background: "#FEE2E2",
+        color: "#DC2626",
+        fontSize: "12px",
+        fontWeight: "700",
+        cursor: "pointer"
+      }}
+    >
+      로그아웃
+    </button>
+  )}
+</div>
   </div>
 );
 
