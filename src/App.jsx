@@ -174,12 +174,14 @@ const KakaoMapTest = ({
   routeSteps = [],
   startMarkerPos = null,
   endMarkerPos = null,
+  userLocation = null,
 }) => {
   const mapDivRef = useRef(null);
   const kakaoMapRef = useRef(null);
   const overlayRefs = useRef([]);
   const polylineRef = useRef(null);
   const routeOverlayRefs = useRef([]);
+  const userLocationOverlayRef = useRef(null);
 
   const getKakaoMarkerInfo = (type) => {
     const normalizedType = type === "stairs" ? "step" : type;
@@ -314,7 +316,61 @@ const drawKakaoRouteLine = (kakao, map, route = []) => {
 
   console.log(`카카오 지도에 실제 경로 ${path.length}개 좌표 표시 완료`);
 };
+const drawUserLocationMarker = (kakao, map) => {
+  if (userLocationOverlayRef.current) {
+    userLocationOverlayRef.current.setMap(null);
+    userLocationOverlayRef.current = null;
+  }
 
+  if (!userLocation) return;
+
+  const lat = Array.isArray(userLocation)
+    ? Number(userLocation[0])
+    : Number(userLocation.lat);
+
+  const lng = Array.isArray(userLocation)
+    ? Number(userLocation[1])
+    : Number(userLocation.lng);
+
+  if (Number.isNaN(lat) || Number.isNaN(lng)) return;
+
+  const markerEl = document.createElement("div");
+  markerEl.style.width = "22px";
+  markerEl.style.height = "22px";
+  markerEl.style.borderRadius = "50%";
+  markerEl.style.background = "#2563EB";
+  markerEl.style.border = "4px solid white";
+  markerEl.style.boxShadow = "0 0 14px rgba(37,99,235,0.65)";
+  markerEl.style.boxSizing = "border-box";
+
+  const pulseEl = document.createElement("div");
+  pulseEl.style.position = "absolute";
+  pulseEl.style.left = "50%";
+  pulseEl.style.top = "50%";
+  pulseEl.style.width = "44px";
+  pulseEl.style.height = "44px";
+  pulseEl.style.borderRadius = "50%";
+  pulseEl.style.background = "rgba(37,99,235,0.18)";
+  pulseEl.style.transform = "translate(-50%, -50%)";
+  pulseEl.style.zIndex = "-1";
+
+  const wrapper = document.createElement("div");
+  wrapper.style.position = "relative";
+  wrapper.style.width = "22px";
+  wrapper.style.height = "22px";
+  wrapper.appendChild(pulseEl);
+  wrapper.appendChild(markerEl);
+
+  const overlay = new kakao.maps.CustomOverlay({
+    map,
+    position: new kakao.maps.LatLng(lat, lng),
+    content: wrapper,
+    yAnchor: 0.5,
+    xAnchor: 0.5,
+  });
+
+  userLocationOverlayRef.current = overlay;
+};
 const drawKakaoMarkers = (kakao, map) => {
   clearKakaoOverlays();
 
@@ -413,6 +469,7 @@ useEffect(() => {
 
       drawKakaoMarkers(kakao, map);
       drawKakaoRouteLine(kakao, map, routeSteps);
+      drawUserLocationMarker(kakao, map);
     })
     .catch((error) => {
       console.error("카카오 지도 진짜 에러:", error);
@@ -442,6 +499,12 @@ useEffect(() => {
 
   drawKakaoRouteLine(window.kakao, kakaoMapRef.current, routeSteps);
 }, [routeSteps, startMarkerPos, endMarkerPos]);
+
+useEffect(() => {
+  if (!window.kakao || !window.kakao.maps || !kakaoMapRef.current) return;
+
+  drawUserLocationMarker(window.kakao, kakaoMapRef.current);
+}, [userLocation]);
 
   return (
     <div
@@ -474,7 +537,7 @@ useEffect(() => {
           boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
         }}
       >
-        카카오 지도 테스트 · 제보 {bfMarkers.length}개
+        이동장애 요소 {bfMarkers.length}개 표시 중
       </div>
     </div>
   );
@@ -2413,11 +2476,11 @@ console.log("bfMarkers:", bfMarkers);
     }
 
     // 🔥 3. 지도 이동
-    if (mapRef.current) {
-      mapRef.current.fitBounds(route, {
-        padding: [60, 60],
-      });
-    }
+    if (mapRef.current && typeof mapRef.current.fitBounds === "function") {
+  mapRef.current.fitBounds(route, {
+    padding: [50, 50],
+  });
+}
 
     // 🔥 4. 지도 경로 저장
     setRouteSteps(route);
@@ -3241,34 +3304,7 @@ return (
     </div>
   </div>
 )}
-{currentView === "kakaoTest" && (
-  <div
-    style={{
-      flex: 1,
-      width: "100%",
-      height: "100vh",
-      paddingTop: "60px",
-      boxSizing: "border-box",
-      background: "#F8FAFC",
-    }}
-  >
-    {renderHeader()}
 
-    <div
-      style={{
-        width: "100%",
-        height: "calc(100vh - 60px)",
-      }}
-    >
-      <KakaoMapTest
-  bfMarkers={bfMarkers}
-  routeSteps={routeSteps}
-  startMarkerPos={startMarkerPos}
-  endMarkerPos={endMarkerPos}
-/>
-    </div>
-  </div>
-)}
       {/* 2. 안전 길찾기 화면 */}
       {currentView === "search" && (
         <div style={{ 
@@ -3529,7 +3565,7 @@ return (
               height: isMobile ? "calc(100vh - 250px)" : "100%" 
             }}>
               
-              {routeInfo && (
+             {routeInfo && (
   <div
     style={{
       position: "absolute",
@@ -3562,8 +3598,6 @@ return (
       <span>📏 {routeInfo.distance}km</span>
       <span>⏱ {routeInfo.duration}분</span>
     </div>
-
-    
   </div>
 )}
              <div
@@ -3573,11 +3607,12 @@ return (
   }}
 >
   <KakaoMapTest
-    bfMarkers={bfMarkers}
-    routeSteps={routeSteps}
-    startMarkerPos={startMarkerPos}
-    endMarkerPos={endMarkerPos}
-  />
+  bfMarkers={bfMarkers}
+  routeSteps={routeSteps}
+  startMarkerPos={startMarkerPos}
+  endMarkerPos={endMarkerPos}
+  userLocation={userLocation}
+/>
 </div>
 
             </div>
