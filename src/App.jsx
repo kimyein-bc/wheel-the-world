@@ -169,10 +169,17 @@ const loadKakaoMapScript = () => {
   });
 };
 
-const KakaoMapTest = ({ bfMarkers = [] }) => {
+const KakaoMapTest = ({
+  bfMarkers = [],
+  routeSteps = [],
+  startMarkerPos = null,
+  endMarkerPos = null,
+}) => {
   const mapDivRef = useRef(null);
   const kakaoMapRef = useRef(null);
   const overlayRefs = useRef([]);
+  const polylineRef = useRef(null);
+  const routeOverlayRefs = useRef([]);
 
   const getKakaoMarkerInfo = (type) => {
     const normalizedType = type === "stairs" ? "step" : type;
@@ -225,126 +232,215 @@ const KakaoMapTest = ({ bfMarkers = [] }) => {
     });
     overlayRefs.current = [];
   };
+const clearKakaoRoute = () => {
+  if (polylineRef.current) {
+    polylineRef.current.setMap(null);
+    polylineRef.current = null;
+  }
 
-  const drawKakaoMarkers = (kakao, map) => {
-    clearKakaoOverlays();
+  routeOverlayRefs.current.forEach((overlay) => {
+    overlay.setMap(null);
+  });
 
-    const validMarkers = bfMarkers.filter(
-      (m) =>
-        m &&
-        typeof m.lat === "number" &&
-        typeof m.lng === "number" &&
-        !Number.isNaN(m.lat) &&
-        !Number.isNaN(m.lng)
-    );
+  routeOverlayRefs.current = [];
+};
 
-    validMarkers.forEach((m) => {
-      const info = getKakaoMarkerInfo(m.type);
+const addRoutePointOverlay = (kakao, map, position, label, color) => {
+  if (!position || position.length < 2) return;
 
-      const markerEl = document.createElement("div");
-      markerEl.style.position = "relative";
-      markerEl.style.display = "flex";
-      markerEl.style.alignItems = "center";
-      markerEl.style.justifyContent = "center";
-      markerEl.style.width = "38px";
-      markerEl.style.height = "38px";
-      markerEl.style.borderRadius = "50%";
-      markerEl.style.background = info.color;
-      markerEl.style.color = "white";
-      markerEl.style.fontSize = "20px";
-      markerEl.style.fontWeight = "900";
-      markerEl.style.border = "3px solid white";
-      markerEl.style.boxShadow = "0 4px 12px rgba(0,0,0,0.25)";
-      markerEl.style.cursor = "pointer";
-      markerEl.style.opacity =
-        m.status === "approved" || m.isOfficial === true ? "1" : "0.55";
-      markerEl.innerText = info.icon;
+  const el = document.createElement("div");
+  el.style.padding = "7px 10px";
+  el.style.borderRadius = "999px";
+  el.style.background = color;
+  el.style.color = "white";
+  el.style.fontSize = "12px";
+  el.style.fontWeight = "900";
+  el.style.boxShadow = "0 4px 12px rgba(0,0,0,0.22)";
+  el.style.border = "2px solid white";
+  el.style.whiteSpace = "nowrap";
+  el.innerText = label;
 
-      const labelEl = document.createElement("div");
-      labelEl.style.position = "absolute";
-      labelEl.style.left = "50%";
-      labelEl.style.top = "42px";
-      labelEl.style.transform = "translateX(-50%)";
-      labelEl.style.whiteSpace = "nowrap";
-      labelEl.style.background = "rgba(255,255,255,0.96)";
-      labelEl.style.border = `1px solid ${info.color}`;
-      labelEl.style.borderRadius = "999px";
-      labelEl.style.padding = "3px 7px";
-      labelEl.style.fontSize = "11px";
-      labelEl.style.fontWeight = "800";
-      labelEl.style.color = info.color;
-      labelEl.style.boxShadow = "0 2px 8px rgba(0,0,0,0.12)";
-      labelEl.innerText =
-        m.status === "pending" ? `${info.label} · 대기` : info.label;
+  const overlay = new kakao.maps.CustomOverlay({
+    map,
+    position: new kakao.maps.LatLng(position[0], position[1]),
+    content: el,
+    yAnchor: 1.35,
+  });
 
-      markerEl.appendChild(labelEl);
+  routeOverlayRefs.current.push(overlay);
+};
 
-      markerEl.onclick = () => {
-        alert(
-          `${info.label}\n\n설명: ${m.desc || "설명 없음"}\n상태: ${
-            m.status || "상태 없음"
-          }\n휠체어 난이도: ${m.wheelLevel || "정보 없음"}`
-        );
-      };
+const drawKakaoRouteLine = (kakao, map, route = []) => {
+  clearKakaoRoute();
 
-      const overlay = new kakao.maps.CustomOverlay({
-        map,
-        position: new kakao.maps.LatLng(m.lat, m.lng),
-        content: markerEl,
-        yAnchor: 1,
-      });
+  if (!route || route.length < 2) {
+    console.log("카카오 지도에 그릴 실제 경로가 아직 없습니다.");
+    return;
+  }
 
-      overlayRefs.current.push(overlay);
+  const path = route
+    .filter(
+      (point) =>
+        Array.isArray(point) &&
+        point.length >= 2 &&
+        !Number.isNaN(Number(point[0])) &&
+        !Number.isNaN(Number(point[1]))
+    )
+    .map(([lat, lng]) => new kakao.maps.LatLng(Number(lat), Number(lng)));
+
+  if (path.length < 2) {
+    console.log("유효한 경로 좌표가 부족합니다.");
+    return;
+  }
+
+  const polyline = new kakao.maps.Polyline({
+    path,
+    strokeWeight: 8,
+    strokeColor: "#2563EB",
+    strokeOpacity: 0.92,
+    strokeStyle: "solid",
+  });
+
+  polyline.setMap(map);
+  polylineRef.current = polyline;
+
+  const bounds = new kakao.maps.LatLngBounds();
+  path.forEach((point) => bounds.extend(point));
+  map.setBounds(bounds);
+
+  addRoutePointOverlay(kakao, map, startMarkerPos, "출발", "#2563EB");
+  addRoutePointOverlay(kakao, map, endMarkerPos, "도착", "#EF4444");
+
+  console.log(`카카오 지도에 실제 경로 ${path.length}개 좌표 표시 완료`);
+};
+
+const drawKakaoMarkers = (kakao, map) => {
+  clearKakaoOverlays();
+
+  const validMarkers = bfMarkers.filter(
+    (m) =>
+      m &&
+      typeof m.lat === "number" &&
+      typeof m.lng === "number" &&
+      !Number.isNaN(m.lat) &&
+      !Number.isNaN(m.lng)
+  );
+
+  validMarkers.forEach((m) => {
+    const info = getKakaoMarkerInfo(m.type);
+
+    const markerEl = document.createElement("div");
+    markerEl.style.position = "relative";
+    markerEl.style.display = "flex";
+    markerEl.style.alignItems = "center";
+    markerEl.style.justifyContent = "center";
+    markerEl.style.width = "38px";
+    markerEl.style.height = "38px";
+    markerEl.style.borderRadius = "50%";
+    markerEl.style.background = info.color;
+    markerEl.style.color = "white";
+    markerEl.style.fontSize = "20px";
+    markerEl.style.fontWeight = "900";
+    markerEl.style.border = "3px solid white";
+    markerEl.style.boxShadow = "0 4px 12px rgba(0,0,0,0.25)";
+    markerEl.style.cursor = "pointer";
+    markerEl.style.opacity =
+      m.status === "approved" || m.isOfficial === true ? "1" : "0.55";
+    markerEl.innerText = info.icon;
+
+    const labelEl = document.createElement("div");
+    labelEl.style.position = "absolute";
+    labelEl.style.left = "50%";
+    labelEl.style.top = "42px";
+    labelEl.style.transform = "translateX(-50%)";
+    labelEl.style.whiteSpace = "nowrap";
+    labelEl.style.background = "rgba(255,255,255,0.96)";
+    labelEl.style.border = `1px solid ${info.color}`;
+    labelEl.style.borderRadius = "999px";
+    labelEl.style.padding = "3px 7px";
+    labelEl.style.fontSize = "11px";
+    labelEl.style.fontWeight = "800";
+    labelEl.style.color = info.color;
+    labelEl.style.boxShadow = "0 2px 8px rgba(0,0,0,0.12)";
+    labelEl.innerText =
+      m.status === "pending" ? `${info.label} · 대기` : info.label;
+
+    markerEl.appendChild(labelEl);
+
+    markerEl.onclick = () => {
+      alert(
+        `${info.label}\n\n설명: ${m.desc || "설명 없음"}\n상태: ${
+          m.status || "상태 없음"
+        }\n휠체어 난이도: ${m.wheelLevel || "정보 없음"}`
+      );
+    };
+
+    const overlay = new kakao.maps.CustomOverlay({
+      map,
+      position: new kakao.maps.LatLng(m.lat, m.lng),
+      content: markerEl,
+      yAnchor: 1,
     });
 
-    console.log(`카카오 지도에 제보 마커 ${validMarkers.length}개 표시 완료`);
-  };
+    overlayRefs.current.push(overlay);
+  });
 
-  useEffect(() => {
-    let isMounted = true;
+  console.log(`카카오 지도에 제보 마커 ${validMarkers.length}개 표시 완료`);
+};
 
-    loadKakaoMapScript()
-      .then((kakao) => {
-        if (!isMounted || !mapDivRef.current) return;
+useEffect(() => {
+  let isMounted = true;
 
-        const center = new kakao.maps.LatLng(37.6345, 126.832);
+  loadKakaoMapScript()
+    .then((kakao) => {
+      if (!isMounted || !mapDivRef.current) return;
 
-        const map = new kakao.maps.Map(mapDivRef.current, {
-          center,
-          level: 4,
-        });
+      const center = new kakao.maps.LatLng(37.6345, 126.832);
 
-        kakaoMapRef.current = map;
-
-        const zoomControl = new kakao.maps.ZoomControl();
-        map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
-
-        const mapTypeControl = new kakao.maps.MapTypeControl();
-        map.addControl(mapTypeControl, kakao.maps.ControlPosition.TOPRIGHT);
-
-        drawKakaoMarkers(kakao, map);
-      })
-      .catch((error) => {
-        console.error("카카오 지도 진짜 에러:", error);
-
-        alert(
-          `카카오 지도 실패: ${
-            error?.message || "원인을 알 수 없습니다. F12 Console을 확인해 주세요."
-          }`
-        );
+      const map = new kakao.maps.Map(mapDivRef.current, {
+        center,
+        level: 4,
       });
 
-    return () => {
-      isMounted = false;
-      clearKakaoOverlays();
-    };
-  }, []);
+      kakaoMapRef.current = map;
 
-  useEffect(() => {
-    if (!window.kakao || !window.kakao.maps || !kakaoMapRef.current) return;
+      const zoomControl = new kakao.maps.ZoomControl();
+      map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
 
-    drawKakaoMarkers(window.kakao, kakaoMapRef.current);
-  }, [bfMarkers]);
+      const mapTypeControl = new kakao.maps.MapTypeControl();
+      map.addControl(mapTypeControl, kakao.maps.ControlPosition.TOPRIGHT);
+
+      drawKakaoMarkers(kakao, map);
+      drawKakaoRouteLine(kakao, map, routeSteps);
+    })
+    .catch((error) => {
+      console.error("카카오 지도 진짜 에러:", error);
+
+      alert(
+        `카카오 지도 실패: ${
+          error?.message || "원인을 알 수 없습니다. F12 Console을 확인해 주세요."
+        }`
+      );
+    });
+
+  return () => {
+    isMounted = false;
+    clearKakaoOverlays();
+    clearKakaoRoute();
+  };
+}, []);
+
+useEffect(() => {
+  if (!window.kakao || !window.kakao.maps || !kakaoMapRef.current) return;
+
+  drawKakaoMarkers(window.kakao, kakaoMapRef.current);
+}, [bfMarkers]);
+
+useEffect(() => {
+  if (!window.kakao || !window.kakao.maps || !kakaoMapRef.current) return;
+
+  drawKakaoRouteLine(window.kakao, kakaoMapRef.current, routeSteps);
+}, [routeSteps, startMarkerPos, endMarkerPos]);
 
   return (
     <div
@@ -2714,7 +2810,12 @@ return (
         height: "calc(100vh - 60px)",
       }}
     >
-      <KakaoMapTest bfMarkers={bfMarkers} />
+      <KakaoMapTest
+  bfMarkers={bfMarkers}
+  routeSteps={routeSteps}
+  startMarkerPos={startMarkerPos}
+  endMarkerPos={endMarkerPos}
+/>
     </div>
   </div>
 )}
@@ -2985,28 +3086,60 @@ return (
       top: "12px",
       left: "50%",
       transform: "translateX(-50%)",
-
       zIndex: 1000,
-
-      background: "rgba(255,255,255,0.95)",
-
-      backdropFilter: "blur(8px)",
-
-      padding: "8px 16px",
-
-      borderRadius: "999px",
-
-      boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
-
       display: "flex",
-      gap: "18px",
-
-      fontWeight: "600",
-      fontSize: "14px"
+      flexDirection: "column",
+      alignItems: "center",
+      gap: "8px",
+      width: isMobile ? "calc(100% - 24px)" : "auto",
+      pointerEvents: "none",
     }}
   >
-    <span>📏 {routeInfo.distance}km</span>
-    <span>⏱ {routeInfo.duration}분</span>
+    <div
+      style={{
+        background: "rgba(255,255,255,0.95)",
+        backdropFilter: "blur(8px)",
+        padding: "8px 16px",
+        borderRadius: "999px",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+        display: "flex",
+        gap: "18px",
+        fontWeight: "600",
+        fontSize: "14px",
+        pointerEvents: "auto",
+      }}
+    >
+      <span>📏 {routeInfo.distance}km</span>
+      <span>⏱ {routeInfo.duration}분</span>
+    </div>
+
+    {routeSteps && routeSteps.length > 1 && (
+      <button
+        onClick={() => {
+          setCurrentView("kakaoTest");
+          window.history.pushState(
+            { view: "kakaoTest" },
+            "",
+            "#kakaoTest"
+          );
+        }}
+        style={{
+          border: "none",
+          borderRadius: "999px",
+          padding: "10px 14px",
+          background: "#FEEBC8",
+          color: "#9A3412",
+          fontSize: "13px",
+          fontWeight: "900",
+          cursor: "pointer",
+          boxShadow: "0 6px 14px rgba(154, 52, 18, 0.16)",
+          pointerEvents: "auto",
+          whiteSpace: "nowrap",
+        }}
+      >
+        카카오 지도에서 경로 보기
+      </button>
+    )}
   </div>
 )}
               <MapContainer
