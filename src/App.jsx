@@ -166,6 +166,21 @@ const loadKakaoMapScript = () => {
     document.head.appendChild(script);
   });
 };
+const getWheelWorldClientId = () => {
+  const storageKey = "wheelWorldClientId";
+
+  let clientId = localStorage.getItem(storageKey);
+
+  if (!clientId) {
+    clientId = `client_${Date.now()}_${Math.random()
+      .toString(36)
+      .slice(2)}`;
+
+    localStorage.setItem(storageKey, clientId);
+  }
+
+  return clientId;
+};
 
 const KakaoMapTest = ({
   bfMarkers = [],
@@ -174,6 +189,19 @@ const KakaoMapTest = ({
   endMarkerPos = null,
   userLocation = null,
   mapRef = null,
+
+  isAdminLoggedIn = false,
+  tempMarker = null,
+  setTempMarker = () => {},
+  newMarkerType = "step",
+  setNewMarkerType = () => {},
+  newMarkerDesc = "",
+  setNewMarkerDesc = () => {},
+  newMarkerImage = null,
+  setNewMarkerImage = () => {},
+  bfConfig = {},
+  wheelLevel = 1,
+  setWheelLevel = () => {},
 }) => {
   const mapDivRef = useRef(null);
   const kakaoMapRef = useRef(null);
@@ -181,6 +209,12 @@ const KakaoMapTest = ({
   const polylineRef = useRef(null);
   const routeOverlayRefs = useRef([]);
   const userLocationOverlayRef = useRef(null);
+  const wheelOverlayRef = useRef(null);
+const wheelAnimationRef = useRef(null);
+  const [selectedMarker, setSelectedMarker] = useState(null);
+  const isAdminLoggedInRef = useRef(isAdminLoggedIn);
+
+isAdminLoggedInRef.current = isAdminLoggedIn;
   const moveKakaoMapTo = (position, zoom = 17) => {
   if (!window.kakao || !window.kakao.maps || !kakaoMapRef.current) return;
 
@@ -404,6 +438,129 @@ const drawUserLocationMarker = (kakao, map) => {
 
   userLocationOverlayRef.current = overlay;
 };
+const clearWheelRouteAnimation = () => {
+  if (wheelAnimationRef.current) {
+    cancelAnimationFrame(wheelAnimationRef.current);
+    wheelAnimationRef.current = null;
+  }
+
+  if (wheelOverlayRef.current) {
+    wheelOverlayRef.current.setMap(null);
+    wheelOverlayRef.current = null;
+  }
+};
+
+const startWheelRouteAnimation = (kakao, map, route = []) => {
+  clearWheelRouteAnimation();
+
+  if (!route || route.length < 2) return;
+
+  const points = route
+    .filter(
+      (point) =>
+        Array.isArray(point) &&
+        point.length >= 2 &&
+        !Number.isNaN(Number(point[0])) &&
+        !Number.isNaN(Number(point[1]))
+    )
+    .map(([lat, lng]) => ({
+      lat: Number(lat),
+      lng: Number(lng),
+    }));
+
+  if (points.length < 2) return;
+
+  const segmentLengths = [];
+  let totalLength = 0;
+
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const a = points[i];
+    const b = points[i + 1];
+
+    const length = Math.sqrt(
+      Math.pow(b.lat - a.lat, 2) + Math.pow(b.lng - a.lng, 2)
+    );
+
+    segmentLengths.push(length);
+    totalLength += length;
+  }
+
+  if (totalLength === 0) return;
+
+  const wheelInner = document.createElement("div");
+  wheelInner.innerText = "🛞";
+  wheelInner.style.fontSize = "26px";
+  wheelInner.style.lineHeight = "1";
+  wheelInner.style.transformOrigin = "center center";
+
+  const wheelWrapper = document.createElement("div");
+  wheelWrapper.style.width = "42px";
+  wheelWrapper.style.height = "42px";
+  wheelWrapper.style.borderRadius = "50%";
+  wheelWrapper.style.background = "white";
+  wheelWrapper.style.display = "flex";
+  wheelWrapper.style.alignItems = "center";
+  wheelWrapper.style.justifyContent = "center";
+  wheelWrapper.style.boxShadow = "0 6px 16px rgba(15,23,42,0.28)";
+  wheelWrapper.style.border = "3px solid #2563EB";
+  wheelWrapper.style.boxSizing = "border-box";
+  wheelWrapper.appendChild(wheelInner);
+
+  const overlay = new kakao.maps.CustomOverlay({
+    map,
+    position: new kakao.maps.LatLng(points[0].lat, points[0].lng),
+    content: wheelWrapper,
+    xAnchor: 0.5,
+    yAnchor: 0.5,
+  });
+
+  wheelOverlayRef.current = overlay;
+
+  const duration = Math.min(9000, Math.max(4200, points.length * 70));
+  const startTime = performance.now();
+
+  const animate = (now) => {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const targetDistance = totalLength * progress;
+
+    let walked = 0;
+    let currentIndex = 0;
+
+    for (let i = 0; i < segmentLengths.length; i += 1) {
+      if (walked + segmentLengths[i] >= targetDistance) {
+        currentIndex = i;
+        break;
+      }
+
+      walked += segmentLengths[i];
+    }
+
+    const segmentLength = segmentLengths[currentIndex] || 1;
+    const segmentProgress = Math.min(
+      Math.max((targetDistance - walked) / segmentLength, 0),
+      1
+    );
+
+    const start = points[currentIndex];
+    const end = points[currentIndex + 1] || points[currentIndex];
+
+    const lat = start.lat + (end.lat - start.lat) * segmentProgress;
+    const lng = start.lng + (end.lng - start.lng) * segmentProgress;
+
+    overlay.setPosition(new kakao.maps.LatLng(lat, lng));
+
+    wheelInner.style.transform = `rotate(${progress * 1440}deg)`;
+
+    if (progress < 1) {
+      wheelAnimationRef.current = requestAnimationFrame(animate);
+    } else {
+      wheelAnimationRef.current = null;
+    }
+  };
+
+  wheelAnimationRef.current = requestAnimationFrame(animate);
+};
 const drawKakaoMarkers = (kakao, map) => {
   clearKakaoOverlays();
 
@@ -458,12 +615,16 @@ const drawKakaoMarkers = (kakao, map) => {
     markerEl.appendChild(labelEl);
 
     markerEl.onclick = () => {
-      alert(
-        `${info.label}\n\n설명: ${m.desc || "설명 없음"}\n상태: ${
-          m.status || "상태 없음"
-        }\n휠체어 난이도: ${m.wheelLevel || "정보 없음"}`
-      );
-    };
+  const markerApproved = m.status === "approved" || m.isOfficial === true;
+
+  setSelectedMarker({
+    ...m,
+    displayLabel: info.label,
+    displayIcon: info.icon,
+    displayColor: info.color,
+    isApproved: markerApproved,
+  });
+};
 
     const overlay = new kakao.maps.CustomOverlay({
       map,
@@ -487,11 +648,24 @@ useEffect(() => {
       const center = new kakao.maps.LatLng(37.6345, 126.832);
 
       const map = new kakao.maps.Map(mapDivRef.current, {
-        center,
-        level: 4,
-      });
+  center,
+  level: 4,
+  disableDoubleClickZoom: true,
+});
 
       kakaoMapRef.current = map;
+      kakao.maps.event.addListener(map, "dblclick", (mouseEvent) => {
+  if (!isAdminLoggedInRef.current) return;
+
+  const latLng = mouseEvent.latLng;
+
+  setSelectedMarker(null);
+
+  setTempMarker({
+    lat: latLng.getLat(),
+    lng: latLng.getLng(),
+  });
+});
       if (mapRef) {
   mapRef.current = {
     flyTo: (position, zoom = 17) => moveKakaoMapTo(position, zoom),
@@ -521,10 +695,11 @@ useEffect(() => {
     });
 
   return () => {
-    isMounted = false;
-    clearKakaoOverlays();
-    clearKakaoRoute();
-  };
+  isMounted = false;
+  clearKakaoOverlays();
+  clearKakaoRoute();
+  clearWheelRouteAnimation();
+};
 }, []);
 
 useEffect(() => {
@@ -537,6 +712,7 @@ useEffect(() => {
   if (!window.kakao || !window.kakao.maps || !kakaoMapRef.current) return;
 
   drawKakaoRouteLine(window.kakao, kakaoMapRef.current, routeSteps);
+  startWheelRouteAnimation(window.kakao, kakaoMapRef.current, routeSteps);
 }, [routeSteps, startMarkerPos, endMarkerPos]);
 
 useEffect(() => {
@@ -578,6 +754,306 @@ useEffect(() => {
       >
         이동장애 요소 {bfMarkers.length}개 표시 중
       </div>
+      {selectedMarker && (
+  <div
+    style={{
+      position: "absolute",
+      left: "50%",
+      bottom: "18px",
+      transform: "translateX(-50%)",
+      zIndex: 30,
+      width: "min(380px, calc(100% - 24px))",
+      background: "rgba(255,255,255,0.98)",
+      borderRadius: "22px",
+      padding: "16px",
+      boxShadow: "0 16px 40px rgba(15,23,42,0.24)",
+      border: "1px solid rgba(255,255,255,0.9)",
+      boxSizing: "border-box",
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+        gap: "10px",
+        marginBottom: "10px",
+      }}
+    >
+      <div>
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "6px 10px",
+            borderRadius: "999px",
+            background: selectedMarker.isApproved
+              ? `${selectedMarker.displayColor}20`
+              : "#F3F4F6",
+            color: selectedMarker.isApproved
+              ? selectedMarker.displayColor
+              : "#64748B",
+            fontSize: "12px",
+            fontWeight: "900",
+            marginBottom: "8px",
+          }}
+        >
+          <span>{selectedMarker.displayIcon}</span>
+          <span>
+            {selectedMarker.displayLabel}
+          </span>
+        </div>
+
+        <div
+          style={{
+            fontSize: "16px",
+            fontWeight: "900",
+            color: "#111827",
+          }}
+        >
+          {selectedMarker.displayLabel || "이동장애 요소"}
+        </div>
+      </div>
+
+      <button
+        onClick={() => setSelectedMarker(null)}
+        style={{
+          border: "none",
+          background: "#E5E7EB",
+          color: "#374151",
+          borderRadius: "50%",
+          width: "30px",
+          height: "30px",
+          fontSize: "16px",
+          fontWeight: "900",
+          cursor: "pointer",
+          flexShrink: 0,
+        }}
+      >
+        ×
+      </button>
+    </div>
+
+    {selectedMarker.image && (
+      <img
+        src={selectedMarker.image}
+        alt="제보 사진"
+        style={{
+          width: "100%",
+          maxHeight: "160px",
+          objectFit: "cover",
+          borderRadius: "14px",
+          marginBottom: "10px",
+          border: "1px solid #E5E7EB",
+        }}
+      />
+    )}
+
+    {selectedMarker.desc?.trim() && (
+  <div
+    style={{
+      fontSize: "14px",
+      lineHeight: 1.55,
+      color: "#374151",
+      whiteSpace: "pre-wrap",
+    }}
+  >
+    {selectedMarker.desc}
+  </div>
+)}
+{isAdminLoggedIn && selectedMarker.id && (
+  <button
+    onClick={async () => {
+      const ok = window.confirm("이 공식 아이콘을 삭제할까요?");
+      if (!ok) return;
+
+      try {
+        await remove(ref(db, `bfMarkers/${selectedMarker.id}`));
+
+        setSelectedMarker(null);
+        alert("아이콘이 삭제되었습니다.");
+      } catch (error) {
+        alert("아이콘 삭제 중 오류가 발생했습니다.");
+      }
+    }}
+    style={{
+      width: "100%",
+      marginTop: "12px",
+      border: "none",
+      borderRadius: "12px",
+      padding: "10px",
+      background: "#FEE2E2",
+      color: "#B91C1C",
+      fontWeight: "900",
+      cursor: "pointer",
+    }}
+  >
+    관리자 삭제
+  </button>
+)}
+  </div>
+)}
+{isAdminLoggedIn && tempMarker && (
+  <div
+    style={{
+      position: "absolute",
+      left: "50%",
+      bottom: "18px",
+      transform: "translateX(-50%)",
+      zIndex: 40,
+      width: "min(360px, calc(100% - 24px))",
+      background: "rgba(255,255,255,0.97)",
+      borderRadius: "22px",
+      padding: "16px",
+      boxShadow: "0 14px 36px rgba(15,23,42,0.24)",
+      border: "1px solid rgba(255,255,255,0.9)",
+      boxSizing: "border-box",
+    }}
+  >
+    <div
+      style={{
+        fontSize: "15px",
+        fontWeight: "900",
+        color: "#111827",
+        marginBottom: "10px",
+      }}
+    >
+      공식 요인 등록
+    </div>
+
+    <select
+      value={newMarkerType}
+      onChange={(e) => setNewMarkerType(e.target.value)}
+      style={{
+        width: "100%",
+        padding: "9px",
+        borderRadius: "10px",
+        border: "1px solid #CBD5E1",
+        marginBottom: "8px",
+        fontWeight: "700",
+      }}
+    >
+      {Object.keys(bfConfig).map((key) => (
+        <option key={key} value={key}>
+          {bfConfig[key].label}
+        </option>
+      ))}
+    </select>
+
+    <textarea
+      placeholder="단차 높이, 경사, 보도 파손 등 상세 설명을 입력하세요."
+      value={newMarkerDesc}
+      onChange={(e) => setNewMarkerDesc(e.target.value)}
+      style={{
+        width: "100%",
+        height: "70px",
+        padding: "9px",
+        borderRadius: "10px",
+        border: "1px solid #CBD5E1",
+        marginBottom: "8px",
+        resize: "none",
+        boxSizing: "border-box",
+      }}
+    />
+
+    <input
+      type="file"
+      accept="image/*"
+      onChange={(e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onloadend = () => setNewMarkerImage(reader.result);
+        reader.readAsDataURL(file);
+      }}
+      style={{
+        width: "100%",
+        marginBottom: "8px",
+        fontSize: "12px",
+      }}
+    />
+
+    <select
+      value={wheelLevel}
+      onChange={(e) => setWheelLevel(Number(e.target.value))}
+      style={{
+        width: "100%",
+        padding: "9px",
+        borderRadius: "10px",
+        border: "1px solid #CBD5E1",
+        marginBottom: "10px",
+        fontWeight: "700",
+      }}
+    >
+      <option value={1}>🟡 1단계: 주의 필요</option>
+      <option value={2}>🔴 2단계: 회피 권장</option>
+    </select>
+
+    <div style={{ display: "flex", gap: "8px" }}>
+      <button
+        onClick={() => {
+          setTempMarker(null);
+          setNewMarkerDesc("");
+          setNewMarkerImage(null);
+        }}
+        style={{
+          flex: 1,
+          border: "none",
+          borderRadius: "12px",
+          padding: "10px",
+          background: "#E5E7EB",
+          color: "#374151",
+          fontWeight: "900",
+          cursor: "pointer",
+        }}
+      >
+        취소
+      </button>
+
+      <button
+        onClick={async () => {
+          try {
+            await push(ref(db, "bfMarkers"), {
+              lat: Number(tempMarker.lat),
+              lng: Number(tempMarker.lng),
+              type: newMarkerType,
+              desc: newMarkerDesc,
+              image: newMarkerImage || "",
+              date: new Date().toLocaleDateString(),
+              status: "approved",
+              isOfficial: true,
+              wheelLevel: Number(wheelLevel),
+            });
+
+            alert("공식 요인이 등록되었습니다.");
+
+            setTempMarker(null);
+            setNewMarkerDesc("");
+            setNewMarkerImage(null);
+            setNewMarkerType("step");
+            setWheelLevel(1);
+          } catch (error) {
+            alert("공식 요인 저장 중 오류가 발생했습니다.");
+          }
+        }}
+        style={{
+          flex: 1,
+          border: "none",
+          borderRadius: "12px",
+          padding: "10px",
+          background: "#2563EB",
+          color: "white",
+          fontWeight: "900",
+          cursor: "pointer",
+        }}
+      >
+        등록
+      </button>
+    </div>
+  </div>
+)}
     </div>
   );
 };
@@ -598,10 +1074,20 @@ const KakaoCreateMap = ({
   wheelLevel,
   setWheelLevel,
 }) => {
-  const mapDivRef = useRef(null);
-  const kakaoMapRef = useRef(null);
-  const overlayRefs = useRef([]);
-  const tempOverlayRef = useRef(null);
+ const mapDivRef = useRef(null);
+const kakaoMapRef = useRef(null);
+const overlayRefs = useRef([]);
+const tempOverlayRef = useRef(null);
+const isAdminLoggedInRef = useRef(isAdminLoggedIn);
+const [selectedCreateMarker, setSelectedCreateMarker] = useState(null);
+const clientIdRef = useRef(getWheelWorldClientId());
+const currentClientId = clientIdRef.current;
+const [editingMarkerId, setEditingMarkerId] = useState(null);
+
+
+
+// 관리자 로그인 상태를 항상 최신으로 유지
+isAdminLoggedInRef.current = isAdminLoggedIn;
 
   const getKakaoMarkerInfo = (type) => {
     const normalizedType = type === "stairs" ? "step" : type;
@@ -694,14 +1180,14 @@ const KakaoCreateMap = ({
     overlayRefs.current.forEach((overlay) => overlay.setMap(null));
     overlayRefs.current = [];
 
-    const validMarkers = bfMarkers.filter(
-      (m) =>
-        m &&
-        typeof m.lat === "number" &&
-        typeof m.lng === "number" &&
-        !Number.isNaN(m.lat) &&
-        !Number.isNaN(m.lng)
-    );
+   const validMarkers = bfMarkers.filter(
+  (m) =>
+    m &&
+    typeof m.lat === "number" &&
+    typeof m.lng === "number" &&
+    !Number.isNaN(m.lat) &&
+    !Number.isNaN(m.lng)
+);
 
     validMarkers.forEach((m) => {
       const info = getKakaoMarkerInfo(m.type);
@@ -728,14 +1214,16 @@ const KakaoCreateMap = ({
       markerEl.innerText = info.icon;
 
       markerEl.onclick = () => {
-        alert(
-          `${isApproved ? info.label : "주민 제보 대기중"}\n\n설명: ${
-            m.desc || "설명 없음"
-          }\n상태: ${m.status || "상태 없음"}\n휠체어 난이도: ${
-            m.wheelLevel || "정보 없음"
-          }`
-        );
-      };
+  setTempMarker(null);
+
+  setSelectedCreateMarker({
+    ...m,
+    displayLabel: info.label,
+    displayIcon: info.icon,
+    displayColor: info.color,
+    isApproved,
+  });
+};
 
       const overlay = new kakao.maps.CustomOverlay({
         map,
@@ -768,17 +1256,36 @@ const KakaoCreateMap = ({
   };
 
   const saveKakaoReportMarker = async () => {
-    if (!tempMarker) {
-      alert("지도에서 위치를 먼저 선택해 주세요.");
-      return;
-    }
+  if (!tempMarker) {
+    alert("지도에서 위치를 먼저 선택해 주세요.");
+    return;
+  }
 
-    if (!newMarkerDesc.trim()) {
-      alert("상세 설명을 입력해 주세요.");
-      return;
-    }
+  if (!newMarkerDesc.trim()) {
+    alert("상세 설명을 입력해 주세요.");
+    return;
+  }
 
-    try {
+  try {
+    if (editingMarkerId) {
+      await update(ref(db, `bfMarkers/${editingMarkerId}`), {
+        lat: Number(tempMarker.lat),
+        lng: Number(tempMarker.lng),
+        type: newMarkerType,
+        desc: newMarkerDesc,
+        image: newMarkerImage || "",
+        updatedAt: new Date().toLocaleString(),
+        status: isAdminLoggedIn ? "approved" : "pending",
+        isOfficial: isAdminLoggedIn,
+        wheelLevel: isAdminLoggedIn ? Number(wheelLevel) : 0,
+      });
+
+      alert(
+        isAdminLoggedIn
+          ? "공식 요인이 수정되었습니다."
+          : "제보가 수정되었습니다. 관리자 승인 후 지도에 반영됩니다."
+      );
+    } else {
       await push(ref(db, "bfMarkers"), {
         lat: Number(tempMarker.lat),
         lng: Number(tempMarker.lng),
@@ -786,6 +1293,8 @@ const KakaoCreateMap = ({
         desc: newMarkerDesc,
         image: newMarkerImage || "",
         date: new Date().toLocaleDateString(),
+        createdAt: Date.now(),
+        ownerId: currentClientId,
         status: isAdminLoggedIn ? "approved" : "pending",
         isOfficial: isAdminLoggedIn,
         wheelLevel: isAdminLoggedIn ? Number(wheelLevel) : 0,
@@ -796,17 +1305,23 @@ const KakaoCreateMap = ({
           ? "공식 안전 요인이 등록되었습니다."
           : "제보가 접수되었습니다. 관리자 승인 후 지도에 반영됩니다."
       );
-
-      setTempMarker(null);
-      setNewMarkerDesc("");
-      setNewMarkerImage(null);
-      setNewMarkerType("step");
-      setWheelLevel(1);
-    } catch (error) {
-      console.error("카카오 제보 저장 실패:", error);
-      alert("제보 저장 중 오류가 발생했습니다.");
     }
-  };
+
+    setTempMarker(null);
+    setSelectedCreateMarker(null);
+    setEditingMarkerId(null);
+    setNewMarkerDesc("");
+    setNewMarkerImage(null);
+    setNewMarkerType("step");
+    setWheelLevel(1);
+  } catch (error) {
+    alert(
+      editingMarkerId
+        ? "수정 중 오류가 발생했습니다."
+        : "제보 저장 중 오류가 발생했습니다."
+    );
+  }
+};
 
   useEffect(() => {
     let isMounted = true;
@@ -818,10 +1333,10 @@ const KakaoCreateMap = ({
         const center = new kakao.maps.LatLng(37.6345, 126.832);
 
         const map = new kakao.maps.Map(mapDivRef.current, {
-          center,
-          level: 4,
-        });
-
+  center,
+  level: 4,
+  disableDoubleClickZoom: true,
+});
         kakaoMapRef.current = map;
 
         if (mapRef) {
@@ -837,14 +1352,21 @@ const KakaoCreateMap = ({
         const mapTypeControl = new kakao.maps.MapTypeControl();
         map.addControl(mapTypeControl, kakao.maps.ControlPosition.TOPRIGHT);
 
-        kakao.maps.event.addListener(map, "click", (mouseEvent) => {
-          const latLng = mouseEvent.latLng;
+      kakao.maps.event.addListener(map, "dblclick", (mouseEvent) => {
+  const latLng = mouseEvent.latLng;
 
-          setTempMarker({
-            lat: latLng.getLat(),
-            lng: latLng.getLng(),
-          });
-        });
+  setSelectedCreateMarker(null);
+  setEditingMarkerId(null);
+  setNewMarkerDesc("");
+  setNewMarkerImage(null);
+  setNewMarkerType("step");
+  setWheelLevel(1);
+
+  setTempMarker({
+    lat: latLng.getLat(),
+    lng: latLng.getLng(),
+  });
+});
 
         drawKakaoCreateMarkers(kakao, map);
       })
@@ -857,10 +1379,10 @@ const KakaoCreateMap = ({
         );
       });
 
-    return () => {
-      isMounted = false;
-      clearKakaoCreateOverlays();
-    };
+   return () => {
+  isMounted = false;
+  clearKakaoCreateOverlays();
+};
   }, []);
 
   useEffect(() => {
@@ -868,7 +1390,9 @@ const KakaoCreateMap = ({
 
     drawKakaoCreateMarkers(window.kakao, kakaoMapRef.current);
   }, [bfMarkers, tempMarker]);
-
+useEffect(() => {
+  isAdminLoggedInRef.current = isAdminLoggedIn;
+}, [isAdminLoggedIn]);
   return (
     <div
       style={{
@@ -900,8 +1424,190 @@ const KakaoCreateMap = ({
           boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
         }}
       >
-        지도에서 위치를 눌러 제보하기
+        지도에서 위치를 더블클릭해 제보하기
       </div>
+      {selectedCreateMarker && (
+  <div
+    style={{
+      position: "absolute",
+      left: "50%",
+      bottom: "18px",
+      transform: "translateX(-50%)",
+      zIndex: 30,
+      width: "min(380px, calc(100% - 24px))",
+      background: "rgba(255,255,255,0.98)",
+      borderRadius: "22px",
+      padding: "16px",
+      boxShadow: "0 16px 40px rgba(15,23,42,0.24)",
+      border: "1px solid rgba(255,255,255,0.9)",
+      boxSizing: "border-box",
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+        gap: "10px",
+        marginBottom: selectedCreateMarker.image || selectedCreateMarker.desc?.trim()
+          ? "10px"
+          : "0",
+      }}
+    >
+      <div>
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "6px 10px",
+            borderRadius: "999px",
+            background: selectedCreateMarker.isApproved
+              ? `${selectedCreateMarker.displayColor}20`
+              : "#F3F4F6",
+            color: selectedCreateMarker.isApproved
+              ? selectedCreateMarker.displayColor
+              : "#64748B",
+            fontSize: "12px",
+            fontWeight: "900",
+            marginBottom: "8px",
+          }}
+        >
+          <span>{selectedCreateMarker.displayIcon}</span>
+          <span>
+            {selectedCreateMarker.isApproved
+              ? selectedCreateMarker.displayLabel
+              : "승인 대기 제보"}
+          </span>
+        </div>
+
+        <div
+          style={{
+            fontSize: "16px",
+            fontWeight: "900",
+            color: "#111827",
+          }}
+        >
+          {selectedCreateMarker.displayLabel || "이동장애 요소"}
+        </div>
+      </div>
+
+      <button
+        onClick={() => setSelectedCreateMarker(null)}
+        style={{
+          border: "none",
+          background: "#E5E7EB",
+          color: "#374151",
+          borderRadius: "50%",
+          width: "30px",
+          height: "30px",
+          fontSize: "16px",
+          fontWeight: "900",
+          cursor: "pointer",
+          flexShrink: 0,
+        }}
+      >
+        ×
+      </button>
+    </div>
+
+    {selectedCreateMarker.image && (
+      <img
+        src={selectedCreateMarker.image}
+        alt="제보 사진"
+        style={{
+          width: "100%",
+          maxHeight: "160px",
+          objectFit: "cover",
+          borderRadius: "14px",
+          marginBottom: "10px",
+          border: "1px solid #E5E7EB",
+        }}
+      />
+    )}
+
+    {selectedCreateMarker.desc?.trim() && (
+      <div
+        style={{
+          fontSize: "14px",
+          lineHeight: 1.55,
+          color: "#374151",
+          whiteSpace: "pre-wrap",
+        }}
+      >
+        {selectedCreateMarker.desc}
+      </div>
+    )}
+    {selectedCreateMarker &&
+  (isAdminLoggedIn || selectedCreateMarker.ownerId === currentClientId) && (
+    <div
+      style={{
+        display: "flex",
+        gap: "8px",
+        marginTop: "12px",
+      }}
+    >
+      <button
+        onClick={() => {
+          setEditingMarkerId(selectedCreateMarker.id);
+
+          setTempMarker({
+            lat: selectedCreateMarker.lat,
+            lng: selectedCreateMarker.lng,
+          });
+
+          setNewMarkerType(selectedCreateMarker.type || "step");
+          setNewMarkerDesc(selectedCreateMarker.desc || "");
+          setNewMarkerImage(selectedCreateMarker.image || null);
+          setWheelLevel(Number(selectedCreateMarker.wheelLevel || 1));
+
+          setSelectedCreateMarker(null);
+        }}
+        style={{
+          flex: 1,
+          border: "none",
+          borderRadius: "12px",
+          padding: "10px",
+          background: "#DBEAFE",
+          color: "#1D4ED8",
+          fontWeight: "900",
+          cursor: "pointer",
+        }}
+      >
+        수정
+      </button>
+
+      <button
+        onClick={async () => {
+          const ok = window.confirm("이 제보를 삭제할까요?");
+          if (!ok) return;
+
+          try {
+            await remove(ref(db, `bfMarkers/${selectedCreateMarker.id}`));
+
+            setSelectedCreateMarker(null);
+            alert("삭제되었습니다.");
+          } catch (error) {
+            alert("삭제 중 오류가 발생했습니다.");
+          }
+        }}
+        style={{
+          flex: 1,
+          border: "none",
+          borderRadius: "12px",
+          padding: "10px",
+          background: "#FEE2E2",
+          color: "#B91C1C",
+          fontWeight: "900",
+          cursor: "pointer",
+        }}
+      >
+        삭제
+      </button>
+    </div>
+  )}
+  </div>
+)}
 
       {tempMarker && (
         <div
@@ -928,7 +1634,13 @@ const KakaoCreateMap = ({
               marginBottom: "10px",
             }}
           >
-            {isAdminLoggedIn ? "공식 요인 등록" : "새로운 제보 등록"}
+            {editingMarkerId
+  ? isAdminLoggedIn
+    ? "공식 요인 수정"
+    : "제보 수정"
+  : isAdminLoggedIn
+  ? "공식 요인 등록"
+  : "새로운 제보 등록"}
           </div>
 
           <select
@@ -1010,10 +1722,14 @@ const KakaoCreateMap = ({
           >
             <button
               onClick={() => {
-                setTempMarker(null);
-                setNewMarkerDesc("");
-                setNewMarkerImage(null);
-              }}
+  setTempMarker(null);
+  setSelectedCreateMarker(null);
+  setEditingMarkerId(null);
+  setNewMarkerDesc("");
+  setNewMarkerImage(null);
+  setNewMarkerType("step");
+  setWheelLevel(1);
+}}
               style={{
                 flex: 1,
                 border: "none",
@@ -3625,13 +4341,27 @@ return (
     height: "100%",
   }}
 >
- <KakaoMapTest
-  bfMarkers={bfMarkers}
+<KakaoMapTest
+  bfMarkers={bfMarkers.filter(
+    (m) => m.status === "approved" || m.isOfficial === true
+  )}
   routeSteps={routeSteps}
   startMarkerPos={startMarkerPos}
   endMarkerPos={endMarkerPos}
   userLocation={userLocation}
   mapRef={mapRef}
+  isAdminLoggedIn={isAdminLoggedIn}
+  tempMarker={tempMarker}
+  setTempMarker={setTempMarker}
+  newMarkerType={newMarkerType}
+  setNewMarkerType={setNewMarkerType}
+  newMarkerDesc={newMarkerDesc}
+  setNewMarkerDesc={setNewMarkerDesc}
+  newMarkerImage={newMarkerImage}
+  setNewMarkerImage={setNewMarkerImage}
+  bfConfig={bfConfig}
+  wheelLevel={wheelLevel}
+  setWheelLevel={setWheelLevel}
 />
 </div>
 
