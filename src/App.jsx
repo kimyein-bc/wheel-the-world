@@ -138,10 +138,8 @@ const loadKakaoMapScript = () => {
     script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_JS_KEY}&libraries=services&autoload=false`;
     script.async = true;
 
-    console.log("카카오 지도 스크립트 URL:", script.src);
 
     script.onload = () => {
-      console.log("카카오 지도 스크립트 로드 완료");
 
       if (!window.kakao || !window.kakao.maps) {
         reject(
@@ -175,6 +173,7 @@ const KakaoMapTest = ({
   startMarkerPos = null,
   endMarkerPos = null,
   userLocation = null,
+  mapRef = null,
 }) => {
   const mapDivRef = useRef(null);
   const kakaoMapRef = useRef(null);
@@ -182,6 +181,43 @@ const KakaoMapTest = ({
   const polylineRef = useRef(null);
   const routeOverlayRefs = useRef([]);
   const userLocationOverlayRef = useRef(null);
+  const moveKakaoMapTo = (position, zoom = 17) => {
+  if (!window.kakao || !window.kakao.maps || !kakaoMapRef.current) return;
+
+  const lat = Array.isArray(position) ? Number(position[0]) : Number(position.lat);
+  const lng = Array.isArray(position) ? Number(position[1]) : Number(position.lng);
+
+  if (Number.isNaN(lat) || Number.isNaN(lng)) return;
+
+  const level =
+    zoom >= 18 ? 2 :
+    zoom >= 17 ? 3 :
+    zoom >= 16 ? 4 :
+    zoom >= 15 ? 5 :
+    6;
+
+  const kakaoPosition = new window.kakao.maps.LatLng(lat, lng);
+  kakaoMapRef.current.setCenter(kakaoPosition);
+  kakaoMapRef.current.setLevel(level);
+};
+
+const fitKakaoMapBounds = (positions = []) => {
+  if (!window.kakao || !window.kakao.maps || !kakaoMapRef.current) return;
+  if (!positions || positions.length < 2) return;
+
+  const bounds = new window.kakao.maps.LatLngBounds();
+
+  positions.forEach((position) => {
+    const lat = Array.isArray(position) ? Number(position[0]) : Number(position.lat);
+    const lng = Array.isArray(position) ? Number(position[1]) : Number(position.lng);
+
+    if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+      bounds.extend(new window.kakao.maps.LatLng(lat, lng));
+    }
+  });
+
+  kakaoMapRef.current.setBounds(bounds);
+};
 
   const getKakaoMarkerInfo = (type) => {
     const normalizedType = type === "stairs" ? "step" : type;
@@ -277,7 +313,6 @@ const drawKakaoRouteLine = (kakao, map, route = []) => {
   clearKakaoRoute();
 
   if (!route || route.length < 2) {
-    console.log("카카오 지도에 그릴 실제 경로가 아직 없습니다.");
     return;
   }
 
@@ -292,7 +327,6 @@ const drawKakaoRouteLine = (kakao, map, route = []) => {
     .map(([lat, lng]) => new kakao.maps.LatLng(Number(lat), Number(lng)));
 
   if (path.length < 2) {
-    console.log("유효한 경로 좌표가 부족합니다.");
     return;
   }
 
@@ -314,7 +348,6 @@ const drawKakaoRouteLine = (kakao, map, route = []) => {
   addRoutePointOverlay(kakao, map, startMarkerPos, "출발", "#2563EB");
   addRoutePointOverlay(kakao, map, endMarkerPos, "도착", "#EF4444");
 
-  console.log(`카카오 지도에 실제 경로 ${path.length}개 좌표 표시 완료`);
 };
 const drawUserLocationMarker = (kakao, map) => {
   if (userLocationOverlayRef.current) {
@@ -442,7 +475,6 @@ const drawKakaoMarkers = (kakao, map) => {
     overlayRefs.current.push(overlay);
   });
 
-  console.log(`카카오 지도에 제보 마커 ${validMarkers.length}개 표시 완료`);
 };
 
 useEffect(() => {
@@ -460,6 +492,13 @@ useEffect(() => {
       });
 
       kakaoMapRef.current = map;
+      if (mapRef) {
+  mapRef.current = {
+    flyTo: (position, zoom = 17) => moveKakaoMapTo(position, zoom),
+    setView: (position, zoom = 17) => moveKakaoMapTo(position, zoom),
+    fitBounds: (positions = []) => fitKakaoMapBounds(positions),
+  };
+}
 
       const zoomControl = new kakao.maps.ZoomControl();
       map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
@@ -2269,7 +2308,6 @@ const getObstacles = (mode, bfMarkers) => {
     ]];
   });
 
-  console.log(`[디버그] ${mode} 모드 - 회피 구역 생성 개수:`, polygons.length);
 
   return {
     type: "MultiPolygon",
@@ -2311,7 +2349,6 @@ const getRoute = async (start, end, mode = "normal", bfMarkers = []) => {
     });
 
     const data = await res.json();
-    console.log("ORS 최종 응답:", data);
 
     if (data.error) {
       console.error("API 에러 상세:", data.error);
@@ -2428,15 +2465,8 @@ if (start === "내 위치" && !startCoords) {
   alert("현재 위치를 먼저 가져와 주세요!");
   return;
 }
-console.log("출발 마커:", [
-  startPos.lat,
-  startPos.lng
-]);
 
-console.log("도착 마커:", [
-  endPos.lat,
-  endPos.lng
-]);
+
     if (!startPos || !endPos) {
       alert("장소의 좌표를 찾을 수 없습니다. 정확한 명칭인지 확인해 주세요!");
       return;
@@ -2458,17 +2488,7 @@ setRouteInfo({
   distance: result.distance,
   duration: result.duration
 });
-console.log(
-  "wheelLevel",
-  bfMarkers[0]?.wheelLevel
-);
-console.log("첫번째 마커", bfMarkers[0]);
-console.log(
-  "마지막 마커 wheelLevel",
-  bfMarkers[bfMarkers.length - 1]?.wheelLevel
-);
-console.log("bfMarkers:", bfMarkers);
-    console.log("생성된 route 선 데이터:", route);
+
 
     if (!route || route.length === 0) {
       alert("경로 생성 실패 (매칭되는 도보/도로가 없습니다)");
@@ -2587,7 +2607,6 @@ if (setCoords) {
     lng,
   };
 
-  console.log("저장되는 좌표:", coords);
 
   setCoords(coords);
 }
@@ -3606,12 +3625,13 @@ return (
     height: "100%",
   }}
 >
-  <KakaoMapTest
+ <KakaoMapTest
   bfMarkers={bfMarkers}
   routeSteps={routeSteps}
   startMarkerPos={startMarkerPos}
   endMarkerPos={endMarkerPos}
   userLocation={userLocation}
+  mapRef={mapRef}
 />
 </div>
 
@@ -3782,7 +3802,6 @@ return (
 <button
  onClick={async () => {
 
-  console.log("2단계 승인:", m.id);
 
   await update(ref(db, `bfMarkers/${m.id}`), {
     status: "approved",
@@ -3858,7 +3877,6 @@ function AddMarker({
 
   }
 });
-console.log("현재 wheelLevel:", wheelLevel);
   if (!tempMarker) return null;
 
   return (
@@ -3895,7 +3913,6 @@ console.log("현재 wheelLevel:", wheelLevel);
           }} />
           
           <button onClick={async () => {
-console.log("Firebase 저장 버튼 클릭");
   if (!desc) {
     alert("설명을 입력해주세요!");
     return;
