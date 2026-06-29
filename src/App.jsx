@@ -3094,33 +3094,7 @@ return (
       <span>⏱ {routeInfo.duration}분</span>
     </div>
 
-    {routeSteps && routeSteps.length > 1 && (
-      <button
-        onClick={() => {
-          setCurrentView("kakaoTest");
-          window.history.pushState(
-            { view: "kakaoTest" },
-            "",
-            "#kakaoTest"
-          );
-        }}
-        style={{
-          border: "none",
-          borderRadius: "999px",
-          padding: "10px 14px",
-          background: "#FEEBC8",
-          color: "#9A3412",
-          fontSize: "13px",
-          fontWeight: "900",
-          cursor: "pointer",
-          boxShadow: "0 6px 14px rgba(154, 52, 18, 0.16)",
-          pointerEvents: "auto",
-          whiteSpace: "nowrap",
-        }}
-      >
-        카카오 지도에서 경로 보기
-      </button>
-    )}
+    
   </div>
 )}
              <div
