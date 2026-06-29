@@ -169,8 +169,136 @@ const loadKakaoMapScript = () => {
   });
 };
 
-const KakaoMapTest = () => {
+const KakaoMapTest = ({ bfMarkers = [] }) => {
   const mapDivRef = useRef(null);
+  const kakaoMapRef = useRef(null);
+  const overlayRefs = useRef([]);
+
+  const getKakaoMarkerInfo = (type) => {
+    const normalizedType = type === "stairs" ? "step" : type;
+
+    const markerInfo = {
+      step: {
+        label: "단차 / 계단",
+        icon: "🪜",
+        color: "#EF4444",
+      },
+      narrow: {
+        label: "좁은 길",
+        icon: "↔️",
+        color: "#F97316",
+      },
+      obstacle: {
+        label: "장애물",
+        icon: "🚧",
+        color: "#F59E0B",
+      },
+      elevator: {
+        label: "엘리베이터",
+        icon: "🛗",
+        color: "#2563EB",
+      },
+      slope: {
+        label: "경사",
+        icon: "⛰️",
+        color: "#8B5CF6",
+      },
+      sidewalk: {
+        label: "보도 상태",
+        icon: "🛣️",
+        color: "#10B981",
+      },
+    };
+
+    return (
+      markerInfo[normalizedType] || {
+        label: "기타",
+        icon: "📍",
+        color: "#64748B",
+      }
+    );
+  };
+
+  const clearKakaoOverlays = () => {
+    overlayRefs.current.forEach((overlay) => {
+      overlay.setMap(null);
+    });
+    overlayRefs.current = [];
+  };
+
+  const drawKakaoMarkers = (kakao, map) => {
+    clearKakaoOverlays();
+
+    const validMarkers = bfMarkers.filter(
+      (m) =>
+        m &&
+        typeof m.lat === "number" &&
+        typeof m.lng === "number" &&
+        !Number.isNaN(m.lat) &&
+        !Number.isNaN(m.lng)
+    );
+
+    validMarkers.forEach((m) => {
+      const info = getKakaoMarkerInfo(m.type);
+
+      const markerEl = document.createElement("div");
+      markerEl.style.position = "relative";
+      markerEl.style.display = "flex";
+      markerEl.style.alignItems = "center";
+      markerEl.style.justifyContent = "center";
+      markerEl.style.width = "38px";
+      markerEl.style.height = "38px";
+      markerEl.style.borderRadius = "50%";
+      markerEl.style.background = info.color;
+      markerEl.style.color = "white";
+      markerEl.style.fontSize = "20px";
+      markerEl.style.fontWeight = "900";
+      markerEl.style.border = "3px solid white";
+      markerEl.style.boxShadow = "0 4px 12px rgba(0,0,0,0.25)";
+      markerEl.style.cursor = "pointer";
+      markerEl.style.opacity =
+        m.status === "approved" || m.isOfficial === true ? "1" : "0.55";
+      markerEl.innerText = info.icon;
+
+      const labelEl = document.createElement("div");
+      labelEl.style.position = "absolute";
+      labelEl.style.left = "50%";
+      labelEl.style.top = "42px";
+      labelEl.style.transform = "translateX(-50%)";
+      labelEl.style.whiteSpace = "nowrap";
+      labelEl.style.background = "rgba(255,255,255,0.96)";
+      labelEl.style.border = `1px solid ${info.color}`;
+      labelEl.style.borderRadius = "999px";
+      labelEl.style.padding = "3px 7px";
+      labelEl.style.fontSize = "11px";
+      labelEl.style.fontWeight = "800";
+      labelEl.style.color = info.color;
+      labelEl.style.boxShadow = "0 2px 8px rgba(0,0,0,0.12)";
+      labelEl.innerText =
+        m.status === "pending" ? `${info.label} · 대기` : info.label;
+
+      markerEl.appendChild(labelEl);
+
+      markerEl.onclick = () => {
+        alert(
+          `${info.label}\n\n설명: ${m.desc || "설명 없음"}\n상태: ${
+            m.status || "상태 없음"
+          }\n휠체어 난이도: ${m.wheelLevel || "정보 없음"}`
+        );
+      };
+
+      const overlay = new kakao.maps.CustomOverlay({
+        map,
+        position: new kakao.maps.LatLng(m.lat, m.lng),
+        content: markerEl,
+        yAnchor: 1,
+      });
+
+      overlayRefs.current.push(overlay);
+    });
+
+    console.log(`카카오 지도에 제보 마커 ${validMarkers.length}개 표시 완료`);
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -186,47 +314,72 @@ const KakaoMapTest = () => {
           level: 4,
         });
 
-        const marker = new kakao.maps.Marker({
-          map,
-          position: center,
-        });
-
-        const infoWindow = new kakao.maps.InfoWindow({
-          content:
-            '<div style="padding:8px 10px;font-size:13px;font-weight:700;white-space:nowrap;">화정역 카카오 지도 테스트</div>',
-        });
-
-        infoWindow.open(map, marker);
+        kakaoMapRef.current = map;
 
         const zoomControl = new kakao.maps.ZoomControl();
         map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
 
         const mapTypeControl = new kakao.maps.MapTypeControl();
         map.addControl(mapTypeControl, kakao.maps.ControlPosition.TOPRIGHT);
+
+        drawKakaoMarkers(kakao, map);
       })
       .catch((error) => {
-  console.error("카카오 지도 진짜 에러:", error);
+        console.error("카카오 지도 진짜 에러:", error);
 
-  alert(
-    `카카오 지도 실패: ${
-      error?.message || "원인을 알 수 없습니다. F12 Console을 확인해 주세요."
-    }`
-  );
-});
+        alert(
+          `카카오 지도 실패: ${
+            error?.message || "원인을 알 수 없습니다. F12 Console을 확인해 주세요."
+          }`
+        );
+      });
 
     return () => {
       isMounted = false;
+      clearKakaoOverlays();
     };
   }, []);
 
+  useEffect(() => {
+    if (!window.kakao || !window.kakao.maps || !kakaoMapRef.current) return;
+
+    drawKakaoMarkers(window.kakao, kakaoMapRef.current);
+  }, [bfMarkers]);
+
   return (
     <div
-      ref={mapDivRef}
       style={{
         width: "100%",
         height: "100%",
+        position: "relative",
       }}
-    />
+    >
+      <div
+        ref={mapDivRef}
+        style={{
+          width: "100%",
+          height: "100%",
+        }}
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          left: "12px",
+          top: "12px",
+          zIndex: 10,
+          background: "rgba(255,255,255,0.94)",
+          borderRadius: "999px",
+          padding: "8px 12px",
+          fontSize: "12px",
+          fontWeight: "900",
+          color: "#334155",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+        }}
+      >
+        카카오 지도 테스트 · 제보 {bfMarkers.length}개
+      </div>
+    </div>
   );
 };
 const CuteCartoonBackground = () => (
@@ -2561,7 +2714,7 @@ return (
         height: "calc(100vh - 60px)",
       }}
     >
-      <KakaoMapTest />
+      <KakaoMapTest bfMarkers={bfMarkers} />
     </div>
   </div>
 )}
