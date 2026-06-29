@@ -245,6 +245,7 @@ const clearKakaoRoute = () => {
   routeOverlayRefs.current = [];
 };
 
+
 const addRoutePointOverlay = (kakao, map, position, label, color) => {
   if (!position || position.length < 2) return;
 
@@ -475,6 +476,474 @@ useEffect(() => {
       >
         카카오 지도 테스트 · 제보 {bfMarkers.length}개
       </div>
+    </div>
+  );
+};
+const KakaoCreateMap = ({
+  bfMarkers = [],
+  mapRef,
+  userRole,
+  isAdminLoggedIn,
+  tempMarker,
+  setTempMarker,
+  newMarkerType,
+  setNewMarkerType,
+  newMarkerDesc,
+  setNewMarkerDesc,
+  newMarkerImage,
+  setNewMarkerImage,
+  bfConfig,
+  wheelLevel,
+  setWheelLevel,
+}) => {
+  const mapDivRef = useRef(null);
+  const kakaoMapRef = useRef(null);
+  const overlayRefs = useRef([]);
+  const tempOverlayRef = useRef(null);
+
+  const getKakaoMarkerInfo = (type) => {
+    const normalizedType = type === "stairs" ? "step" : type;
+
+    const markerInfo = {
+      step: {
+        label: "단차 / 계단",
+        icon: "🪜",
+        color: "#EF4444",
+      },
+      narrow: {
+        label: "좁은 길",
+        icon: "↔️",
+        color: "#F97316",
+      },
+      obstacle: {
+        label: "장애물",
+        icon: "🚧",
+        color: "#F59E0B",
+      },
+      elevator: {
+        label: "엘리베이터",
+        icon: "🛗",
+        color: "#2563EB",
+      },
+      slope: {
+        label: "경사",
+        icon: "⛰️",
+        color: "#8B5CF6",
+      },
+      sidewalk: {
+        label: "보도 상태",
+        icon: "🛣️",
+        color: "#10B981",
+      },
+    };
+
+    return (
+      markerInfo[normalizedType] || {
+        label: "기타",
+        icon: "📍",
+        color: "#64748B",
+      }
+    );
+  };
+
+  const clearKakaoCreateOverlays = () => {
+    overlayRefs.current.forEach((overlay) => overlay.setMap(null));
+    overlayRefs.current = [];
+
+    if (tempOverlayRef.current) {
+      tempOverlayRef.current.setMap(null);
+      tempOverlayRef.current = null;
+    }
+  };
+
+  const drawTempMarker = (kakao, map) => {
+    if (tempOverlayRef.current) {
+      tempOverlayRef.current.setMap(null);
+      tempOverlayRef.current = null;
+    }
+
+    if (!tempMarker) return;
+
+    const el = document.createElement("div");
+    el.style.width = "42px";
+    el.style.height = "42px";
+    el.style.borderRadius = "50%";
+    el.style.background = "#111827";
+    el.style.color = "white";
+    el.style.display = "flex";
+    el.style.alignItems = "center";
+    el.style.justifyContent = "center";
+    el.style.fontSize = "22px";
+    el.style.border = "3px solid white";
+    el.style.boxShadow = "0 5px 14px rgba(0,0,0,0.28)";
+    el.innerText = "📍";
+
+    const overlay = new kakao.maps.CustomOverlay({
+      map,
+      position: new kakao.maps.LatLng(tempMarker.lat, tempMarker.lng),
+      content: el,
+      yAnchor: 1,
+    });
+
+    tempOverlayRef.current = overlay;
+  };
+
+  const drawKakaoCreateMarkers = (kakao, map) => {
+    overlayRefs.current.forEach((overlay) => overlay.setMap(null));
+    overlayRefs.current = [];
+
+    const validMarkers = bfMarkers.filter(
+      (m) =>
+        m &&
+        typeof m.lat === "number" &&
+        typeof m.lng === "number" &&
+        !Number.isNaN(m.lat) &&
+        !Number.isNaN(m.lng)
+    );
+
+    validMarkers.forEach((m) => {
+      const info = getKakaoMarkerInfo(m.type);
+      const isApproved = m.status === "approved" || m.isOfficial === true;
+
+      const markerEl = document.createElement("div");
+      markerEl.style.position = "relative";
+      markerEl.style.display = "flex";
+      markerEl.style.alignItems = "center";
+      markerEl.style.justifyContent = "center";
+      markerEl.style.width = "38px";
+      markerEl.style.height = "38px";
+      markerEl.style.borderRadius = "50%";
+      markerEl.style.background = "white";
+      markerEl.style.color = "#111827";
+      markerEl.style.fontSize = "20px";
+      markerEl.style.fontWeight = "900";
+      markerEl.style.border = isApproved
+        ? `3px solid ${info.color}`
+        : "3px dashed #999";
+      markerEl.style.boxShadow = "0 4px 12px rgba(0,0,0,0.25)";
+      markerEl.style.cursor = "pointer";
+      markerEl.style.opacity = isApproved ? "1" : "0.65";
+      markerEl.innerText = info.icon;
+
+      markerEl.onclick = () => {
+        alert(
+          `${isApproved ? info.label : "주민 제보 대기중"}\n\n설명: ${
+            m.desc || "설명 없음"
+          }\n상태: ${m.status || "상태 없음"}\n휠체어 난이도: ${
+            m.wheelLevel || "정보 없음"
+          }`
+        );
+      };
+
+      const overlay = new kakao.maps.CustomOverlay({
+        map,
+        position: new kakao.maps.LatLng(m.lat, m.lng),
+        content: markerEl,
+        yAnchor: 1,
+      });
+
+      overlayRefs.current.push(overlay);
+    });
+
+    drawTempMarker(kakao, map);
+  };
+
+  const moveKakaoMapTo = (position, zoom = 17) => {
+    if (!window.kakao || !window.kakao.maps || !kakaoMapRef.current) return;
+
+    const lat = Array.isArray(position) ? position[0] : position.lat;
+    const lng = Array.isArray(position) ? position[1] : position.lng;
+
+    const level =
+      zoom >= 18 ? 2 :
+      zoom >= 17 ? 3 :
+      zoom >= 16 ? 4 :
+      5;
+
+    const kakaoPosition = new window.kakao.maps.LatLng(lat, lng);
+    kakaoMapRef.current.setCenter(kakaoPosition);
+    kakaoMapRef.current.setLevel(level);
+  };
+
+  const saveKakaoReportMarker = async () => {
+    if (!tempMarker) {
+      alert("지도에서 위치를 먼저 선택해 주세요.");
+      return;
+    }
+
+    if (!newMarkerDesc.trim()) {
+      alert("상세 설명을 입력해 주세요.");
+      return;
+    }
+
+    try {
+      await push(ref(db, "bfMarkers"), {
+        lat: Number(tempMarker.lat),
+        lng: Number(tempMarker.lng),
+        type: newMarkerType,
+        desc: newMarkerDesc,
+        image: newMarkerImage || "",
+        date: new Date().toLocaleDateString(),
+        status: isAdminLoggedIn ? "approved" : "pending",
+        isOfficial: isAdminLoggedIn,
+        wheelLevel: isAdminLoggedIn ? Number(wheelLevel) : 0,
+      });
+
+      alert(
+        isAdminLoggedIn
+          ? "공식 안전 요인이 등록되었습니다."
+          : "제보가 접수되었습니다. 관리자 승인 후 지도에 반영됩니다."
+      );
+
+      setTempMarker(null);
+      setNewMarkerDesc("");
+      setNewMarkerImage(null);
+      setNewMarkerType("step");
+      setWheelLevel(1);
+    } catch (error) {
+      console.error("카카오 제보 저장 실패:", error);
+      alert("제보 저장 중 오류가 발생했습니다.");
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    loadKakaoMapScript()
+      .then((kakao) => {
+        if (!isMounted || !mapDivRef.current) return;
+
+        const center = new kakao.maps.LatLng(37.6345, 126.832);
+
+        const map = new kakao.maps.Map(mapDivRef.current, {
+          center,
+          level: 4,
+        });
+
+        kakaoMapRef.current = map;
+
+        if (mapRef) {
+          mapRef.current = {
+            flyTo: (position, zoom = 17) => moveKakaoMapTo(position, zoom),
+            setView: (position, zoom = 17) => moveKakaoMapTo(position, zoom),
+          };
+        }
+
+        const zoomControl = new kakao.maps.ZoomControl();
+        map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
+
+        const mapTypeControl = new kakao.maps.MapTypeControl();
+        map.addControl(mapTypeControl, kakao.maps.ControlPosition.TOPRIGHT);
+
+        kakao.maps.event.addListener(map, "click", (mouseEvent) => {
+          const latLng = mouseEvent.latLng;
+
+          setTempMarker({
+            lat: latLng.getLat(),
+            lng: latLng.getLng(),
+          });
+        });
+
+        drawKakaoCreateMarkers(kakao, map);
+      })
+      .catch((error) => {
+        console.error("카카오 주민 제보 지도 에러:", error);
+        alert(
+          `카카오 지도 실패: ${
+            error?.message || "원인을 알 수 없습니다. F12 Console을 확인해 주세요."
+          }`
+        );
+      });
+
+    return () => {
+      isMounted = false;
+      clearKakaoCreateOverlays();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!window.kakao || !window.kakao.maps || !kakaoMapRef.current) return;
+
+    drawKakaoCreateMarkers(window.kakao, kakaoMapRef.current);
+  }, [bfMarkers, tempMarker]);
+
+  return (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        position: "relative",
+      }}
+    >
+      <div
+        ref={mapDivRef}
+        style={{
+          width: "100%",
+          height: "100%",
+        }}
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          left: "12px",
+          top: "12px",
+          zIndex: 10,
+          background: "rgba(255,255,255,0.94)",
+          borderRadius: "999px",
+          padding: "8px 12px",
+          fontSize: "12px",
+          fontWeight: "900",
+          color: "#334155",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+        }}
+      >
+        지도에서 위치를 눌러 제보하기
+      </div>
+
+      {tempMarker && (
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            bottom: "18px",
+            transform: "translateX(-50%)",
+            zIndex: 20,
+            width: "min(360px, calc(100% - 24px))",
+            background: "rgba(255,255,255,0.97)",
+            borderRadius: "22px",
+            padding: "16px",
+            boxShadow: "0 14px 36px rgba(15,23,42,0.24)",
+            border: "1px solid rgba(255,255,255,0.9)",
+            boxSizing: "border-box",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "15px",
+              fontWeight: "900",
+              color: "#111827",
+              marginBottom: "10px",
+            }}
+          >
+            {isAdminLoggedIn ? "공식 요인 등록" : "새로운 제보 등록"}
+          </div>
+
+          <select
+            value={newMarkerType}
+            onChange={(e) => setNewMarkerType(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "9px",
+              borderRadius: "10px",
+              border: "1px solid #CBD5E1",
+              marginBottom: "8px",
+              fontWeight: "700",
+            }}
+          >
+            {Object.keys(bfConfig).map((key) => (
+              <option key={key} value={key}>
+                {bfConfig[key].label}
+              </option>
+            ))}
+          </select>
+
+          <textarea
+            placeholder="단차 높이, 경사, 보도 파손 등 상세 설명을 입력하세요."
+            value={newMarkerDesc}
+            onChange={(e) => setNewMarkerDesc(e.target.value)}
+            style={{
+              width: "100%",
+              height: "70px",
+              padding: "9px",
+              borderRadius: "10px",
+              border: "1px solid #CBD5E1",
+              marginBottom: "8px",
+              resize: "none",
+              boxSizing: "border-box",
+            }}
+          />
+
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+
+              const reader = new FileReader();
+              reader.onloadend = () => setNewMarkerImage(reader.result);
+              reader.readAsDataURL(file);
+            }}
+            style={{
+              width: "100%",
+              marginBottom: "8px",
+              fontSize: "12px",
+            }}
+          />
+
+          {isAdminLoggedIn && (
+            <select
+              value={wheelLevel}
+              onChange={(e) => setWheelLevel(Number(e.target.value))}
+              style={{
+                width: "100%",
+                padding: "9px",
+                borderRadius: "10px",
+                border: "1px solid #CBD5E1",
+                marginBottom: "10px",
+                fontWeight: "700",
+              }}
+            >
+              <option value={1}>🟡 1단계: 주의 필요</option>
+              <option value={2}>🔴 2단계: 회피 권장</option>
+            </select>
+          )}
+
+          <div
+            style={{
+              display: "flex",
+              gap: "8px",
+            }}
+          >
+            <button
+              onClick={() => {
+                setTempMarker(null);
+                setNewMarkerDesc("");
+                setNewMarkerImage(null);
+              }}
+              style={{
+                flex: 1,
+                border: "none",
+                borderRadius: "12px",
+                padding: "10px",
+                background: "#E5E7EB",
+                color: "#374151",
+                fontWeight: "900",
+                cursor: "pointer",
+              }}
+            >
+              취소
+            </button>
+
+            <button
+              onClick={saveKakaoReportMarker}
+              style={{
+                flex: 1,
+                border: "none",
+                borderRadius: "12px",
+                padding: "10px",
+                background: "#2563EB",
+                color: "white",
+                fontWeight: "900",
+                cursor: "pointer",
+              }}
+            >
+              등록
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -3300,134 +3769,23 @@ return (
       <div style={{ flex: 1, position: "relative" }}>
         
 
-        <MapContainer center={[37.6345, 126.832]} zoom={16} style={{ width: "100%", height: "100%" }} ref={mapRef}>
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          {/* 📍 현재 내 위치 마커 */}
-{userLocation && (
-  <Marker
-    position={userLocation}
-    icon={divIcon({
-      html: `
-        <div style="
-          width:22px;
-          height:22px;
-          background:#2563EB;
-          border:4px solid white;
-          border-radius:50%;
-          box-shadow:0 0 12px rgba(37,99,235,0.5);
-        "></div>
-      `,
-      className: "",
-      iconSize: [22, 22],
-      iconAnchor: [11, 11],
-    })}
-  >
-    <Popup>📍 현재 내 위치</Popup>
-  </Marker>
-)}
-
-          {/* 제보 입력을 위한 클릭 이벤트 컴포넌트 */}
-          {/* App.jsx 의 return 안에서 AddMarker 호출하는 부분을 이렇게 바꾸세요 */}
-<AddMarker 
-  setBfMarkers={setBfMarkers}
-  selectedType={newMarkerType}
-  setSelectedType={setNewMarkerType}
-  bfConfig={bfConfig} 
-  setTempMarker={setTempMarker}
+       <KakaoCreateMap
+  bfMarkers={bfMarkers}
+  mapRef={mapRef}
+  userRole={userRole}
+  isAdminLoggedIn={isAdminLoggedIn}
   tempMarker={tempMarker}
-  desc={newMarkerDesc} 
-  setDesc={setNewMarkerDesc}
-  image={newMarkerImage}
-  setImage={setNewMarkerImage}
-  isAdminLoggedIn={isAdminLoggedIn} 
-   wheelLevel={wheelLevel}
+  setTempMarker={setTempMarker}
+  newMarkerType={newMarkerType}
+  setNewMarkerType={setNewMarkerType}
+  newMarkerDesc={newMarkerDesc}
+  setNewMarkerDesc={setNewMarkerDesc}
+  newMarkerImage={newMarkerImage}
+  setNewMarkerImage={setNewMarkerImage}
+  bfConfig={bfConfig}
+  wheelLevel={wheelLevel}
   setWheelLevel={setWheelLevel}
-  clientId={clientId}
 />
-
-          {/* 📌 모든 데이터 통합 렌더링 (공식 + 주민제보) */}
-          {bfMarkers.map((m) => {
-
-            const config = bfConfig[m.type] || { color: "#6B7280", icon: "📍", label: "기타" };
-            const isApproved = m.status === "approved";
-
-            return (
-              <Marker
-                key={m.id}
-                position={[m.lat, m.lng]}
-                icon={divIcon({
-                  html: `
-                    <div style="
-                      width:34px; height:34px; background:white; border-radius:50%;
-                      border:${
-  userRole === "admin" && m.wheelLevel
-    ? (m.wheelLevel === 2
-        ? "3px solid #DC2626"
-        : "3px solid #F59E0B")
-    : (isApproved
-        ? `3px solid ${config.color}`
-        : "3px solid #999")
-};
-                      display:flex; align-items:center; justify-content:center;
-                      box-shadow: 0 3px 8px rgba(0,0,0,0.25); font-size:18px;
-                      ${!isApproved ? "border-style: dashed;" : ""}
-                    ">
-                      ${config.icon}
-                    </div>
-                  `,
-                  className: "custom-marker",
-                  iconSize: [34, 34],
-                  iconAnchor: [17, 17],
-                })}
-              >
-                <Popup>
-                  <div style={{ textAlign: "center" }}>
-                    <b>{isApproved ? config.label : "주민 제보(대기중)"}</b>
-                    <p>{m.desc}</p>
-                    {m.image && <img src={m.image} style={{ width: "100px", borderRadius: "5px" }} />}
-                    <br />
-                    {m.status === "pending" && (userRole === "admin" || m.ownerId === clientId) && (
-  <div style={{ display: "flex", gap: "6px", justifyContent: "center", marginTop: "8px" }}>
-    <button
-      onClick={async () => {
-        const newDesc = window.prompt("수정할 설명을 입력하세요.", m.desc || "");
-
-        if (newDesc === null) return;
-
-        if (!newDesc.trim()) {
-          alert("설명은 비워둘 수 없습니다.");
-          return;
-        }
-
-        await update(ref(db, `bfMarkers/${m.id}`), {
-          desc: newDesc.trim(),
-          editedAt: Date.now()
-        });
-
-        alert("제보 내용이 수정되었습니다.");
-      }}
-    >
-      수정하기
-    </button>
-
-    <button
-      onClick={async () => {
-        if (window.confirm("이 제보를 삭제할까요?")) {
-          await remove(ref(db, `bfMarkers/${m.id}`));
-        }
-      }}
-    >
-      삭제하기
-    </button>
-  </div>
-)}
-
-                  </div>
-                </Popup>
-              </Marker>
-            );
-          })}
-        </MapContainer>
       </div>
     </div>
   </div>
