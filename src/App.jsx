@@ -188,6 +188,7 @@ const KakaoMapTest = ({
   startMarkerPos = null,
   endMarkerPos = null,
   userLocation = null,
+  deviceHeading = null,
   mapRef = null,
 
   isAdminLoggedIn = false,
@@ -211,10 +212,13 @@ const KakaoMapTest = ({
   const userLocationOverlayRef = useRef(null);
   const wheelOverlayRef = useRef(null);
 const wheelAnimationRef = useRef(null);
-  const [selectedMarker, setSelectedMarker] = useState(null);
-  const isAdminLoggedInRef = useRef(isAdminLoggedIn);
+ const [selectedMarker, setSelectedMarker] = useState(null);
+const [isKakaoMapReady, setIsKakaoMapReady] = useState(false);
+const isAdminLoggedInRef = useRef(isAdminLoggedIn);
+const latestBfMarkersRef = useRef(bfMarkers);
 
 isAdminLoggedInRef.current = isAdminLoggedIn;
+latestBfMarkersRef.current = bfMarkers;
   const moveKakaoMapTo = (position, zoom = 17) => {
   if (!window.kakao || !window.kakao.maps || !kakaoMapRef.current) return;
 
@@ -401,14 +405,41 @@ const drawUserLocationMarker = (kakao, map) => {
 
   if (Number.isNaN(lat) || Number.isNaN(lng)) return;
 
-  const markerEl = document.createElement("div");
-  markerEl.style.width = "22px";
-  markerEl.style.height = "22px";
-  markerEl.style.borderRadius = "50%";
-  markerEl.style.background = "#2563EB";
-  markerEl.style.border = "4px solid white";
-  markerEl.style.boxShadow = "0 0 14px rgba(37,99,235,0.65)";
-  markerEl.style.boxSizing = "border-box";
+  const heading = Number(deviceHeading);
+  const hasHeading = !Number.isNaN(heading);
+
+  const wrapper = document.createElement("div");
+  wrapper.style.position = "relative";
+  wrapper.style.width = "58px";
+  wrapper.style.height = "58px";
+  wrapper.style.pointerEvents = "none";
+
+  if (hasHeading) {
+    const arrowEl = document.createElement("div");
+    arrowEl.innerHTML = `
+      <svg width="58" height="58" viewBox="0 0 58 58">
+        <path
+          d="M29 3 L42 34 L29 27 L16 34 Z"
+          fill="#2563EB"
+          stroke="white"
+          stroke-width="3"
+          stroke-linejoin="round"
+        />
+      </svg>
+    `;
+
+    arrowEl.style.position = "absolute";
+    arrowEl.style.left = "0";
+    arrowEl.style.top = "0";
+    arrowEl.style.width = "58px";
+    arrowEl.style.height = "58px";
+    arrowEl.style.transform = `rotate(${heading}deg)`;
+    arrowEl.style.transformOrigin = "50% 50%";
+    arrowEl.style.filter = "drop-shadow(0 3px 8px rgba(37,99,235,0.35))";
+    arrowEl.style.zIndex = "1";
+
+    wrapper.appendChild(arrowEl);
+  }
 
   const pulseEl = document.createElement("div");
   pulseEl.style.position = "absolute";
@@ -419,12 +450,22 @@ const drawUserLocationMarker = (kakao, map) => {
   pulseEl.style.borderRadius = "50%";
   pulseEl.style.background = "rgba(37,99,235,0.18)";
   pulseEl.style.transform = "translate(-50%, -50%)";
-  pulseEl.style.zIndex = "-1";
+  pulseEl.style.zIndex = "2";
 
-  const wrapper = document.createElement("div");
-  wrapper.style.position = "relative";
-  wrapper.style.width = "22px";
-  wrapper.style.height = "22px";
+  const markerEl = document.createElement("div");
+  markerEl.style.position = "absolute";
+  markerEl.style.left = "50%";
+  markerEl.style.top = "50%";
+  markerEl.style.width = "22px";
+  markerEl.style.height = "22px";
+  markerEl.style.borderRadius = "50%";
+  markerEl.style.background = "#2563EB";
+  markerEl.style.border = "4px solid white";
+  markerEl.style.boxShadow = "0 0 14px rgba(37,99,235,0.65)";
+  markerEl.style.boxSizing = "border-box";
+  markerEl.style.transform = "translate(-50%, -50%)";
+  markerEl.style.zIndex = "3";
+
   wrapper.appendChild(pulseEl);
   wrapper.appendChild(markerEl);
 
@@ -564,15 +605,25 @@ const startWheelRouteAnimation = (kakao, map, route = []) => {
 const drawKakaoMarkers = (kakao, map) => {
   clearKakaoOverlays();
 
-  const validMarkers = bfMarkers.filter(
+  const markerSource = latestBfMarkersRef.current || [];
+
+const validMarkers = markerSource
+  .filter(
     (m) =>
       m &&
-      typeof m.lat === "number" &&
-      typeof m.lng === "number" &&
+      m.lat !== undefined &&
+      m.lng !== undefined
+  )
+  .map((m) => ({
+    ...m,
+    lat: Number(m.lat),
+    lng: Number(m.lng),
+  }))
+  .filter(
+    (m) =>
       !Number.isNaN(m.lat) &&
       !Number.isNaN(m.lng)
   );
-
   validMarkers.forEach((m) => {
     const info = getKakaoMarkerInfo(m.type);
 
@@ -635,6 +686,7 @@ useEffect(() => {
 });
 
       kakaoMapRef.current = map;
+      setIsKakaoMapReady(true);
       kakao.maps.event.addListener(map, "dblclick", (mouseEvent) => {
   if (!isAdminLoggedInRef.current) return;
 
@@ -661,9 +713,13 @@ useEffect(() => {
       const mapTypeControl = new kakao.maps.MapTypeControl();
       map.addControl(mapTypeControl, kakao.maps.ControlPosition.TOPRIGHT);
 
-      drawKakaoMarkers(kakao, map);
-      drawKakaoRouteLine(kakao, map, routeSteps);
-      drawUserLocationMarker(kakao, map);
+      setTimeout(() => {
+  if (!isMounted) return;
+
+  map.relayout();
+  drawKakaoRouteLine(kakao, map, routeSteps);
+  drawUserLocationMarker(kakao, map);
+}, 80);
     })
     .catch((error) => {
       console.error("카카오 지도 진짜 에러:", error);
@@ -684,23 +740,58 @@ useEffect(() => {
 }, []);
 
 useEffect(() => {
-  if (!window.kakao || !window.kakao.maps || !kakaoMapRef.current) return;
+  if (
+    !isKakaoMapReady ||
+    !window.kakao ||
+    !window.kakao.maps ||
+    !kakaoMapRef.current
+  ) {
+    return;
+  }
 
-  drawKakaoMarkers(window.kakao, kakaoMapRef.current);
-}, [bfMarkers]);
+  const drawNow = () => {
+    if (!kakaoMapRef.current) return;
 
+    kakaoMapRef.current.relayout();
+    drawKakaoMarkers(window.kakao, kakaoMapRef.current);
+  };
+
+  const timer1 = setTimeout(drawNow, 80);
+  const timer2 = setTimeout(drawNow, 350);
+  const timer3 = setTimeout(drawNow, 800);
+
+  return () => {
+    clearTimeout(timer1);
+    clearTimeout(timer2);
+    clearTimeout(timer3);
+  };
+}, [isKakaoMapReady, bfMarkers]);
 useEffect(() => {
-  if (!window.kakao || !window.kakao.maps || !kakaoMapRef.current) return;
+  if (
+    !isKakaoMapReady ||
+    !window.kakao ||
+    !window.kakao.maps ||
+    !kakaoMapRef.current
+  ) {
+    return;
+  }
 
   drawKakaoRouteLine(window.kakao, kakaoMapRef.current, routeSteps);
   startWheelRouteAnimation(window.kakao, kakaoMapRef.current, routeSteps);
-}, [routeSteps, startMarkerPos, endMarkerPos]);
+}, [isKakaoMapReady, routeSteps, startMarkerPos, endMarkerPos]);
 
 useEffect(() => {
-  if (!window.kakao || !window.kakao.maps || !kakaoMapRef.current) return;
+  if (
+    !isKakaoMapReady ||
+    !window.kakao ||
+    !window.kakao.maps ||
+    !kakaoMapRef.current
+  ) {
+    return;
+  }
 
   drawUserLocationMarker(window.kakao, kakaoMapRef.current);
-}, [userLocation]);
+}, [isKakaoMapReady, userLocation, deviceHeading]);
 
   return (
     <div
@@ -1064,11 +1155,12 @@ const [selectedCreateMarker, setSelectedCreateMarker] = useState(null);
 const clientIdRef = useRef(getWheelWorldClientId());
 const currentClientId = clientIdRef.current;
 const [editingMarkerId, setEditingMarkerId] = useState(null);
+const [isCreateMapReady, setIsCreateMapReady] = useState(false);
+const latestCreateBfMarkersRef = useRef(bfMarkers);
 
-
-
-// 관리자 로그인 상태를 항상 최신으로 유지
+// 관리자 로그인 상태와 마커 목록을 항상 최신으로 유지
 isAdminLoggedInRef.current = isAdminLoggedIn;
+latestCreateBfMarkersRef.current = bfMarkers;
 
   const getKakaoMarkerInfo = (type) => {
     const normalizedType = type === "stairs" ? "step" : type;
@@ -1161,14 +1253,25 @@ isAdminLoggedInRef.current = isAdminLoggedIn;
     overlayRefs.current.forEach((overlay) => overlay.setMap(null));
     overlayRefs.current = [];
 
-   const validMarkers = bfMarkers.filter(
-  (m) =>
-    m &&
-    typeof m.lat === "number" &&
-    typeof m.lng === "number" &&
-    !Number.isNaN(m.lat) &&
-    !Number.isNaN(m.lng)
-);
+   const markerSource = latestCreateBfMarkersRef.current || [];
+
+const validMarkers = markerSource
+  .filter(
+    (m) =>
+      m &&
+      m.lat !== undefined &&
+      m.lng !== undefined
+  )
+  .map((m) => ({
+    ...m,
+    lat: Number(m.lat),
+    lng: Number(m.lng),
+  }))
+  .filter(
+    (m) =>
+      !Number.isNaN(m.lat) &&
+      !Number.isNaN(m.lng)
+  );
 
     validMarkers.forEach((m) => {
       const info = getKakaoMarkerInfo(m.type);
@@ -1319,6 +1422,7 @@ isAdminLoggedInRef.current = isAdminLoggedIn;
   disableDoubleClickZoom: true,
 });
         kakaoMapRef.current = map;
+        setIsCreateMapReady(true);
 
         if (mapRef) {
           mapRef.current = {
@@ -1349,7 +1453,11 @@ isAdminLoggedInRef.current = isAdminLoggedIn;
   });
 });
 
-        drawKakaoCreateMarkers(kakao, map);
+       setTimeout(() => {
+  if (!isMounted) return;
+
+  map.relayout();
+}, 80);
       })
       .catch((error) => {
         console.error("카카오 주민 제보 지도 에러:", error);
@@ -1367,10 +1475,32 @@ isAdminLoggedInRef.current = isAdminLoggedIn;
   }, []);
 
   useEffect(() => {
-    if (!window.kakao || !window.kakao.maps || !kakaoMapRef.current) return;
+  if (
+    !isCreateMapReady ||
+    !window.kakao ||
+    !window.kakao.maps ||
+    !kakaoMapRef.current
+  ) {
+    return;
+  }
 
+  const drawNow = () => {
+    if (!kakaoMapRef.current) return;
+
+    kakaoMapRef.current.relayout();
     drawKakaoCreateMarkers(window.kakao, kakaoMapRef.current);
-  }, [bfMarkers, tempMarker]);
+  };
+
+  const timer1 = setTimeout(drawNow, 80);
+  const timer2 = setTimeout(drawNow, 350);
+  const timer3 = setTimeout(drawNow, 800);
+
+  return () => {
+    clearTimeout(timer1);
+    clearTimeout(timer2);
+    clearTimeout(timer3);
+  };
+}, [isCreateMapReady, bfMarkers, tempMarker]);
 useEffect(() => {
   isAdminLoggedInRef.current = isAdminLoggedIn;
 }, [isAdminLoggedIn]);
@@ -2506,6 +2636,7 @@ const [userRole, setUserRole] = useState("user"); // 'admin' 또는 'user' (테�
 // 💡 App 컴포넌트 내부 최상단 상태 정의 구역 수정
 
 const [bfMarkers, setBfMarkers] = useState([]);
+const [isBfMarkersLoaded, setIsBfMarkersLoaded] = useState(false);
 
 useEffect(() => {
   const markersRef = ref(db, "bfMarkers");
@@ -2515,15 +2646,17 @@ useEffect(() => {
 
     if (!data) {
       setBfMarkers([]);
+      setIsBfMarkersLoaded(true);
       return;
     }
 
     const markers = Object.entries(data).map(([id, value]) => ({
       id,
-      ...value
+      ...value,
     }));
 
     setBfMarkers(markers);
+    setIsBfMarkersLoaded(true);
   });
 
   return () => unsubscribe();
@@ -2705,6 +2838,9 @@ const surveyWatchRef = useRef(null);
   const [markers, setMarkers] = useState([]);
   const [selectedType, setSelectedType] = useState("step");
   const [userLocation, setUserLocation] = useState(null);
+  const [deviceHeading, setDeviceHeading] = useState(null);
+  const compassHandlerRef = useRef(null);
+  const isCompassTrackingRef = useRef(false);
   const [isSurveying, setIsSurveying] = useState(false);
   const [surveyTracks, setSurveyTracks] = useState([]);
 const [surveyTrack, setSurveyTrack] = useState([]);
@@ -3286,9 +3422,68 @@ const handleAddBfMarker = async () => {
   setNewMarkerImage(null);
   setNewMarkerType("step");
 };
+const startCompassTracking = async () => {
+  if (!window.DeviceOrientationEvent) {
+    return;
+  }
 
+  if (isCompassTrackingRef.current) {
+    return;
+  }
+
+  if (!compassHandlerRef.current) {
+    compassHandlerRef.current = (event) => {
+      let heading = null;
+
+      // iPhone Safari 계열
+      if (typeof event.webkitCompassHeading === "number") {
+        heading = event.webkitCompassHeading;
+      }
+
+      // Android Chrome 계열
+      else if (typeof event.alpha === "number") {
+        heading = 360 - event.alpha;
+      }
+
+      if (heading === null) return;
+
+      const normalizedHeading = ((heading % 360) + 360) % 360;
+      setDeviceHeading(normalizedHeading);
+    };
+  }
+
+  try {
+    // iPhone은 사용자가 버튼을 누른 직후 권한 요청을 해야 함
+    if (
+      typeof DeviceOrientationEvent.requestPermission === "function"
+    ) {
+      const permission = await DeviceOrientationEvent.requestPermission();
+
+      if (permission !== "granted") {
+        return;
+      }
+    }
+
+    window.addEventListener(
+      "deviceorientationabsolute",
+      compassHandlerRef.current,
+      true
+    );
+
+    window.addEventListener(
+      "deviceorientation",
+      compassHandlerRef.current,
+      true
+    );
+
+    isCompassTrackingRef.current = true;
+  } catch (error) {
+    console.error("방향 센서 권한 오류:", error);
+  }
+};
 // setPoint 파라미터를 추가합니다. (예: setStartPoint 또는 setEndPoint)
 const moveToMyLocation = async (setPoint, setCoords) => {
+  await startCompassTracking();
   if (!navigator.geolocation) {
     alert("이 브라우저에서는 GPS를 지원하지 않습니다.");
     return;
@@ -4334,28 +4529,48 @@ return (
     height: "100%",
   }}
 >
-<KakaoMapTest
-  bfMarkers={bfMarkers.filter(
-    (m) => m.status === "approved" || m.isOfficial === true
-  )}
-  routeSteps={routeSteps}
-  startMarkerPos={startMarkerPos}
-  endMarkerPos={endMarkerPos}
-  userLocation={userLocation}
-  mapRef={mapRef}
-  isAdminLoggedIn={isAdminLoggedIn}
-  tempMarker={tempMarker}
-  setTempMarker={setTempMarker}
-  newMarkerType={newMarkerType}
-  setNewMarkerType={setNewMarkerType}
-  newMarkerDesc={newMarkerDesc}
-  setNewMarkerDesc={setNewMarkerDesc}
-  newMarkerImage={newMarkerImage}
-  setNewMarkerImage={setNewMarkerImage}
-  bfConfig={bfConfig}
-  wheelLevel={wheelLevel}
-  setWheelLevel={setWheelLevel}
-/>
+{!isBfMarkersLoaded ? (
+  <div
+    style={{
+      width: "100%",
+      height: "100%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "#F8FAFC",
+      color: "#475569",
+      fontSize: "14px",
+      fontWeight: "900",
+    }}
+  >
+    지도 아이콘 불러오는 중...
+  </div>
+) : (
+  <KakaoMapTest
+    key={`search-map-${bfMarkers.length}`}
+    bfMarkers={bfMarkers.filter(
+      (m) => m.status === "approved" || m.isOfficial === true
+    )}
+    routeSteps={routeSteps}
+    startMarkerPos={startMarkerPos}
+    endMarkerPos={endMarkerPos}
+    userLocation={userLocation}
+    deviceHeading={deviceHeading}
+    mapRef={mapRef}
+    isAdminLoggedIn={isAdminLoggedIn}
+    tempMarker={tempMarker}
+    setTempMarker={setTempMarker}
+    newMarkerType={newMarkerType}
+    setNewMarkerType={setNewMarkerType}
+    newMarkerDesc={newMarkerDesc}
+    setNewMarkerDesc={setNewMarkerDesc}
+    newMarkerImage={newMarkerImage}
+    setNewMarkerImage={setNewMarkerImage}
+    bfConfig={bfConfig}
+    wheelLevel={wheelLevel}
+    setWheelLevel={setWheelLevel}
+  />
+)}
 </div>
 
             </div>
@@ -4551,23 +4766,42 @@ return (
       <div style={{ flex: 1, position: "relative" }}>
         
 
-       <KakaoCreateMap
-  bfMarkers={bfMarkers}
-  mapRef={mapRef}
-  userRole={userRole}
-  isAdminLoggedIn={isAdminLoggedIn}
-  tempMarker={tempMarker}
-  setTempMarker={setTempMarker}
-  newMarkerType={newMarkerType}
-  setNewMarkerType={setNewMarkerType}
-  newMarkerDesc={newMarkerDesc}
-  setNewMarkerDesc={setNewMarkerDesc}
-  newMarkerImage={newMarkerImage}
-  setNewMarkerImage={setNewMarkerImage}
-  bfConfig={bfConfig}
-  wheelLevel={wheelLevel}
-  setWheelLevel={setWheelLevel}
-/>
+       {!isBfMarkersLoaded ? (
+  <div
+    style={{
+      width: "100%",
+      height: "100%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "#F8FAFC",
+      color: "#475569",
+      fontSize: "14px",
+      fontWeight: "900",
+    }}
+  >
+    지도 아이콘 불러오는 중...
+  </div>
+) : (
+  <KakaoCreateMap
+    key={`create-map-${bfMarkers.length}`}
+    bfMarkers={bfMarkers}
+    mapRef={mapRef}
+    userRole={userRole}
+    isAdminLoggedIn={isAdminLoggedIn}
+    tempMarker={tempMarker}
+    setTempMarker={setTempMarker}
+    newMarkerType={newMarkerType}
+    setNewMarkerType={setNewMarkerType}
+    newMarkerDesc={newMarkerDesc}
+    setNewMarkerDesc={setNewMarkerDesc}
+    newMarkerImage={newMarkerImage}
+    setNewMarkerImage={setNewMarkerImage}
+    bfConfig={bfConfig}
+    wheelLevel={wheelLevel}
+    setWheelLevel={setWheelLevel}
+  />
+)}
       </div>
     </div>
   </div>
