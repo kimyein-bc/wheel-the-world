@@ -595,25 +595,6 @@ const drawKakaoMarkers = (kakao, map) => {
       m.status === "approved" || m.isOfficial === true ? "1" : "0.55";
     markerEl.innerText = info.icon;
 
-    const labelEl = document.createElement("div");
-    labelEl.style.position = "absolute";
-    labelEl.style.left = "50%";
-    labelEl.style.top = "42px";
-    labelEl.style.transform = "translateX(-50%)";
-    labelEl.style.whiteSpace = "nowrap";
-    labelEl.style.background = "rgba(255,255,255,0.96)";
-    labelEl.style.border = `1px solid ${info.color}`;
-    labelEl.style.borderRadius = "999px";
-    labelEl.style.padding = "3px 7px";
-    labelEl.style.fontSize = "11px";
-    labelEl.style.fontWeight = "800";
-    labelEl.style.color = info.color;
-    labelEl.style.boxShadow = "0 2px 8px rgba(0,0,0,0.12)";
-    labelEl.innerText =
-      m.status === "pending" ? `${info.label} · 대기` : info.label;
-
-    markerEl.appendChild(labelEl);
-
     markerEl.onclick = () => {
   const markerApproved = m.status === "approved" || m.isOfficial === true;
 
@@ -3193,11 +3174,15 @@ if (start === "내 위치" && !startCoords) {
     setEndMarkerPos([endPos.lat, endPos.lng]);
 
     // 🔥 2. 경로 생성 (getRoute 함수가 {lat, lng} 객체를 정상적으로 받도록 전달)
-    const result = await getRoute(
+    const approvedRouteMarkers = bfMarkers.filter(
+  (m) => m.status === "approved" || m.isOfficial === true
+);
+
+const result = await getRoute(
   startPos,
   endPos,
   routeMode,
-  bfMarkers
+  approvedRouteMarkers
 );
 const route = result.routeCoords;
 setRouteInfo({
@@ -4162,18 +4147,22 @@ return (
       setStartCoords
     );
   }}
-      style={{
-        padding: "10px",
-        borderRadius: "8px",
-        background: "#3B82F6",
-        color: "white",
-        border: "none",
-        cursor: "pointer",
-        fontWeight: "bold"
-      }}
-    >
-      📍
-    </button>
+  style={{
+    width: "58px",
+    minWidth: "58px",
+    padding: "0 8px",
+    borderRadius: "8px",
+    background: "#3B82F6",
+    color: "white",
+    border: "none",
+    cursor: "pointer",
+    fontWeight: "900",
+    fontSize: "12px",
+    whiteSpace: "nowrap",
+  }}
+>
+  내 위치
+</button>
   </div>
                   
   {/* 출발지 자동완성 리스트 */}
@@ -4228,26 +4217,30 @@ return (
         border: "1px solid #CBD5E1"
       }}
     />
-    <button 
-      type="button" 
-      onClick={() =>
- moveToMyLocation(
-  setEndPoint,
-  setEndCoords
-)
-}
-      style={{
-        padding: "10px",
-        borderRadius: "8px",
-        background: "#3B82F6",
-        color: "white",
-        border: "none",
-        cursor: "pointer",
-        fontWeight: "bold"
-      }}
-    >
-      📍
-    </button>
+    <button
+  type="button"
+  onClick={() =>
+    moveToMyLocation(
+      setEndPoint,
+      setEndCoords
+    )
+  }
+  style={{
+    width: "58px",
+    minWidth: "58px",
+    padding: "0 8px",
+    borderRadius: "8px",
+    background: "#3B82F6",
+    color: "white",
+    border: "none",
+    cursor: "pointer",
+    fontWeight: "900",
+    fontSize: "12px",
+    whiteSpace: "nowrap",
+  }}
+>
+  내 위치
+</button>
   </div>
                 
                   {/* 목적지 인풋 바로 아래에 삽입 */}
@@ -4470,15 +4463,20 @@ return (
   <button
   onClick={() => moveToMyLocation()}
   style={{
-    padding: "10px 14px",
+    width: "58px",
+    minWidth: "58px",
+    padding: "0 8px",
     border: "none",
     borderRadius: "8px",
     background: "#2563EB",
     color: "white",
-    cursor: "pointer"
+    cursor: "pointer",
+    fontWeight: "900",
+    fontSize: "12px",
+    whiteSpace: "nowrap",
   }}
 >
-  📍
+  내 위치
 </button>
 </div>
 
