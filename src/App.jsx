@@ -1245,6 +1245,8 @@ if (newMarkerImage) {
 };
 const KakaoCreateMap = ({
   bfMarkers = [],
+  userLocation = null,
+  deviceHeading = null,
   mapRef,
   userRole,
   isAdminLoggedIn,
@@ -1263,6 +1265,7 @@ const KakaoCreateMap = ({
  const mapDivRef = useRef(null);
 const kakaoMapRef = useRef(null);
 const overlayRefs = useRef([]);
+const createUserLocationOverlayRef = useRef(null);
 const tempOverlayRef = useRef(null);
 const isAdminLoggedInRef = useRef(isAdminLoggedIn);
 const [selectedCreateMarker, setSelectedCreateMarker] = useState(null);
@@ -1438,7 +1441,99 @@ const validMarkers = markerSource
 
     drawTempMarker(kakao, map);
   };
+const drawKakaoCreateUserLocationMarker = (kakao, map) => {
+  if (createUserLocationOverlayRef.current) {
+    createUserLocationOverlayRef.current.setMap(null);
+    createUserLocationOverlayRef.current = null;
+  }
 
+  if (!userLocation) return;
+
+  const lat = Array.isArray(userLocation)
+    ? Number(userLocation[0])
+    : Number(userLocation.lat);
+
+  const lng = Array.isArray(userLocation)
+    ? Number(userLocation[1])
+    : Number(userLocation.lng);
+
+  if (Number.isNaN(lat) || Number.isNaN(lng)) return;
+
+  const heading = Number(deviceHeading);
+  const hasHeading = !Number.isNaN(heading);
+
+  const wrapper = document.createElement("div");
+  wrapper.style.position = "relative";
+  wrapper.style.width = "58px";
+  wrapper.style.height = "58px";
+  wrapper.style.pointerEvents = "none";
+
+  if (hasHeading) {
+    const arrowEl = document.createElement("div");
+
+    arrowEl.innerHTML = `
+      <svg width="58" height="58" viewBox="0 0 58 58">
+        <path
+          d="M29 3 L42 34 L29 27 L16 34 Z"
+          fill="#2563EB"
+          stroke="white"
+          stroke-width="3"
+          stroke-linejoin="round"
+        />
+      </svg>
+    `;
+
+    arrowEl.style.position = "absolute";
+    arrowEl.style.left = "0";
+    arrowEl.style.top = "0";
+    arrowEl.style.width = "58px";
+    arrowEl.style.height = "58px";
+    arrowEl.style.transform = `rotate(${heading}deg)`;
+    arrowEl.style.transformOrigin = "50% 50%";
+    arrowEl.style.filter = "drop-shadow(0 3px 8px rgba(37,99,235,0.35))";
+    arrowEl.style.zIndex = "1";
+
+    wrapper.appendChild(arrowEl);
+  }
+
+  const pulseEl = document.createElement("div");
+  pulseEl.style.position = "absolute";
+  pulseEl.style.left = "50%";
+  pulseEl.style.top = "50%";
+  pulseEl.style.width = "44px";
+  pulseEl.style.height = "44px";
+  pulseEl.style.borderRadius = "50%";
+  pulseEl.style.background = "rgba(37,99,235,0.18)";
+  pulseEl.style.transform = "translate(-50%, -50%)";
+  pulseEl.style.zIndex = "2";
+
+  const markerEl = document.createElement("div");
+  markerEl.style.position = "absolute";
+  markerEl.style.left = "50%";
+  markerEl.style.top = "50%";
+  markerEl.style.width = "22px";
+  markerEl.style.height = "22px";
+  markerEl.style.borderRadius = "50%";
+  markerEl.style.background = "#2563EB";
+  markerEl.style.border = "4px solid white";
+  markerEl.style.boxShadow = "0 0 14px rgba(37,99,235,0.65)";
+  markerEl.style.boxSizing = "border-box";
+  markerEl.style.transform = "translate(-50%, -50%)";
+  markerEl.style.zIndex = "3";
+
+  wrapper.appendChild(pulseEl);
+  wrapper.appendChild(markerEl);
+
+  const overlay = new kakao.maps.CustomOverlay({
+    map,
+    position: new kakao.maps.LatLng(lat, lng),
+    content: wrapper,
+    yAnchor: 0.5,
+    xAnchor: 0.5,
+  });
+
+  createUserLocationOverlayRef.current = overlay;
+};
   const moveKakaoMapTo = (position, zoom = 17) => {
     if (!window.kakao || !window.kakao.maps || !kakaoMapRef.current) return;
 
@@ -1624,6 +1719,25 @@ if (newMarkerImage) {
     clearTimeout(timer3);
   };
 }, [isCreateMapReady, bfMarkers, tempMarker]);
+useEffect(() => {
+  if (
+    !isCreateMapReady ||
+    !window.kakao ||
+    !window.kakao.maps ||
+    !kakaoMapRef.current
+  ) {
+    return;
+  }
+
+  drawKakaoCreateUserLocationMarker(window.kakao, kakaoMapRef.current);
+
+  return () => {
+    if (createUserLocationOverlayRef.current) {
+      createUserLocationOverlayRef.current.setMap(null);
+      createUserLocationOverlayRef.current = null;
+    }
+  };
+}, [isCreateMapReady, userLocation, deviceHeading]);
 useEffect(() => {
   isAdminLoggedInRef.current = isAdminLoggedIn;
 }, [isAdminLoggedIn]);
@@ -5262,6 +5376,8 @@ return (
   <KakaoCreateMap
     key={`create-map-${bfMarkers.length}`}
     bfMarkers={bfMarkers}
+    userLocation={userLocation}
+    deviceHeading={deviceHeading}
     mapRef={mapRef}
     userRole={userRole}
     isAdminLoggedIn={isAdminLoggedIn}
