@@ -16,11 +16,13 @@ import {
   set,
   push,
   onValue,
+  onChildAdded,
+  onChildChanged,
+  onChildRemoved,
   update,
   remove,
-  get
+  get,
 } from "firebase/database";
-
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import DaumPostcode from 'react-daum-postcode';
@@ -181,7 +183,105 @@ const getWheelWorldClientId = () => {
 
   return clientId;
 };
+const loadMarkerImageSafely = async (marker) => {
+  if (!marker?.id) return "";
 
+  try {
+    const newImageSnapshot = await get(
+      ref(db, `bfMarkerImages/${marker.id}/image`)
+    );
+
+    const newImage = newImageSnapshot.val();
+
+    if (newImage) {
+      return newImage;
+    }
+  } catch (error) {
+    console.error("새 사진 위치 불러오기 실패:", error);
+  }
+
+  try {
+    const oldImageSnapshot = await get(
+      ref(db, `bfMarkers/${marker.id}/image`)
+    );
+
+    return oldImageSnapshot.val() || "";
+  } catch (error) {
+    console.error("기존 사진 위치 불러오기 실패:", error);
+    return "";
+  }
+};
+const MARKER_CACHE_KEY = "wheelWorldBfMarkersLightCacheV3";
+
+const makeLightMarker = (id, value = {}) => ({
+  id,
+  lat: Number(value.lat),
+  lng: Number(value.lng),
+  type: value.type || "step",
+  desc: value.desc || "",
+  status: value.status || "pending",
+  isOfficial: value.isOfficial === true,
+  wheelLevel: Number(value.wheelLevel || 0),
+  ownerId: value.ownerId || "",
+  date: value.date || "",
+  createdAt: value.createdAt || 0,
+  updatedAt: value.updatedAt || "",
+
+  // 중요:
+  // 새 방식은 hasImage를 보고,
+  // 기존 방식은 value.image가 있으면 사진 있음으로 처리함.
+  hasImage: value.hasImage === true || !!value.image,
+});
+
+const saveMarkerImageIfNeeded = async (markerId, imageDataUrl) => {
+  if (!markerId) return;
+
+  if (imageDataUrl) {
+    await set(ref(db, `bfMarkerImages/${markerId}`), {
+      image: imageDataUrl,
+      updatedAt: Date.now(),
+    });
+  } else {
+    await remove(ref(db, `bfMarkerImages/${markerId}`));
+  }
+};
+
+
+
+const compressImageToDataUrl = (file, maxWidth = 900, quality = 0.68) => {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      resolve("");
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const img = new Image();
+
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+
+        const scale = Math.min(1, maxWidth / img.width);
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        resolve(dataUrl);
+      };
+
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
 const KakaoMapTest = ({
   bfMarkers = [],
   routeSteps = [],
@@ -646,11 +746,13 @@ const validMarkers = markerSource
       m.status === "approved" || m.isOfficial === true ? "1" : "0.55";
     markerEl.innerText = info.icon;
 
-    markerEl.onclick = () => {
+    markerEl.onclick = async () => {
   const markerApproved = m.status === "approved" || m.isOfficial === true;
+  const loadedImage = await loadMarkerImageSafely(m);
 
   setSelectedMarker({
     ...m,
+    image: loadedImage,
     displayLabel: info.label,
     displayIcon: info.icon,
     displayColor: info.color,
@@ -942,6 +1044,7 @@ useEffect(() => {
 
       try {
         await remove(ref(db, `bfMarkers/${selectedMarker.id}`));
+        await remove(ref(db, `bfMarkerImages/${selectedMarker.id}`));
 
         setSelectedMarker(null);
         alert("아이콘이 삭제되었습니다.");
@@ -1037,8 +1140,14 @@ useEffect(() => {
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onloadend = () => setNewMarkerImage(reader.result);
-        reader.readAsDataURL(file);
+        compressImageToDataUrl(file)
+  .then((compressedImage) => {
+    setNewMarkerImage(compressedImage);
+  })
+  .catch((error) => {
+    console.error("사진 압축 실패:", error);
+    alert("사진을 불러오는 중 오류가 발생했습니다.");
+  });
       }}
       style={{
         width: "100%",
@@ -1087,17 +1196,22 @@ useEffect(() => {
       <button
         onClick={async () => {
           try {
-            await push(ref(db, "bfMarkers"), {
-              lat: Number(tempMarker.lat),
-              lng: Number(tempMarker.lng),
-              type: newMarkerType,
-              desc: newMarkerDesc,
-              image: newMarkerImage || "",
-              date: new Date().toLocaleDateString(),
-              status: "approved",
-              isOfficial: true,
-              wheelLevel: Number(wheelLevel),
-            });
+            const newMarkerRef = await push(ref(db, "bfMarkers"), {
+  lat: Number(tempMarker.lat),
+  lng: Number(tempMarker.lng),
+  type: newMarkerType,
+  desc: newMarkerDesc,
+  hasImage: !!newMarkerImage,
+  date: new Date().toLocaleDateString(),
+  createdAt: Date.now(),
+  status: "approved",
+  isOfficial: true,
+  wheelLevel: Number(wheelLevel),
+});
+
+if (newMarkerImage) {
+  await saveMarkerImageIfNeeded(newMarkerRef.key, newMarkerImage);
+}
 
             alert("공식 요인이 등록되었습니다.");
 
@@ -1297,11 +1411,14 @@ const validMarkers = markerSource
       markerEl.style.opacity = isApproved ? "1" : "0.65";
       markerEl.innerText = info.icon;
 
-      markerEl.onclick = () => {
+      markerEl.onclick = async () => {
   setTempMarker(null);
+
+  const loadedImage = await loadMarkerImageSafely(m);
 
   setSelectedCreateMarker({
     ...m,
+    image: loadedImage,
     displayLabel: info.label,
     displayIcon: info.icon,
     displayColor: info.color,
@@ -1353,16 +1470,18 @@ const validMarkers = markerSource
   try {
     if (editingMarkerId) {
       await update(ref(db, `bfMarkers/${editingMarkerId}`), {
-        lat: Number(tempMarker.lat),
-        lng: Number(tempMarker.lng),
-        type: newMarkerType,
-        desc: newMarkerDesc,
-        image: newMarkerImage || "",
-        updatedAt: new Date().toLocaleString(),
-        status: isAdminLoggedIn ? "approved" : "pending",
-        isOfficial: isAdminLoggedIn,
-        wheelLevel: isAdminLoggedIn ? Number(wheelLevel) : 0,
-      });
+  lat: Number(tempMarker.lat),
+  lng: Number(tempMarker.lng),
+  type: newMarkerType,
+  desc: newMarkerDesc,
+  hasImage: !!newMarkerImage,
+  updatedAt: new Date().toLocaleString(),
+  status: isAdminLoggedIn ? "approved" : "pending",
+  isOfficial: isAdminLoggedIn,
+  wheelLevel: isAdminLoggedIn ? Number(wheelLevel) : 0,
+});
+
+await saveMarkerImageIfNeeded(editingMarkerId, newMarkerImage);
 
       alert(
         isAdminLoggedIn
@@ -1370,19 +1489,23 @@ const validMarkers = markerSource
           : "제보가 수정되었습니다. 관리자 승인 후 지도에 반영됩니다."
       );
     } else {
-      await push(ref(db, "bfMarkers"), {
-        lat: Number(tempMarker.lat),
-        lng: Number(tempMarker.lng),
-        type: newMarkerType,
-        desc: newMarkerDesc,
-        image: newMarkerImage || "",
-        date: new Date().toLocaleDateString(),
-        createdAt: Date.now(),
-        ownerId: currentClientId,
-        status: isAdminLoggedIn ? "approved" : "pending",
-        isOfficial: isAdminLoggedIn,
-        wheelLevel: isAdminLoggedIn ? Number(wheelLevel) : 0,
-      });
+      const newMarkerRef = await push(ref(db, "bfMarkers"), {
+  lat: Number(tempMarker.lat),
+  lng: Number(tempMarker.lng),
+  type: newMarkerType,
+  desc: newMarkerDesc,
+  hasImage: !!newMarkerImage,
+  date: new Date().toLocaleDateString(),
+  createdAt: Date.now(),
+  ownerId: currentClientId,
+  status: isAdminLoggedIn ? "approved" : "pending",
+  isOfficial: isAdminLoggedIn,
+  wheelLevel: isAdminLoggedIn ? Number(wheelLevel) : 0,
+});
+
+if (newMarkerImage) {
+  await saveMarkerImageIfNeeded(newMarkerRef.key, newMarkerImage);
+}
 
       alert(
         isAdminLoggedIn
@@ -1695,6 +1818,7 @@ useEffect(() => {
 
           try {
             await remove(ref(db, `bfMarkers/${selectedCreateMarker.id}`));
+            await remove(ref(db, `bfMarkerImages/${selectedCreateMarker.id}`));
 
             setSelectedCreateMarker(null);
             alert("삭제되었습니다.");
@@ -1797,8 +1921,14 @@ useEffect(() => {
               if (!file) return;
 
               const reader = new FileReader();
-              reader.onloadend = () => setNewMarkerImage(reader.result);
-              reader.readAsDataURL(file);
+              compressImageToDataUrl(file)
+  .then((compressedImage) => {
+    setNewMarkerImage(compressedImage);
+  })
+  .catch((error) => {
+    console.error("사진 압축 실패:", error);
+    alert("사진을 불러오는 중 오류가 발생했습니다.");
+  });
             }}
             style={{
               width: "100%",
@@ -2634,32 +2764,105 @@ const [userRole, setUserRole] = useState("user"); // 'admin' 또는 'user' (테�
 
 // 무장애/위험 요소 마커들을 저장할 배열 상태 (기존 markers 배열이 있다면 합치거나 대체 가능)
 // 💡 App 컴포넌트 내부 최상단 상태 정의 구역 수정
+const [bfMarkers, setBfMarkers] = useState(() => {
+  try {
+    const cached = localStorage.getItem(MARKER_CACHE_KEY);
+    return cached ? JSON.parse(cached) : [];
+  } catch (error) {
+    return [];
+  }
+});
 
-const [bfMarkers, setBfMarkers] = useState([]);
-const [isBfMarkersLoaded, setIsBfMarkersLoaded] = useState(false);
+const [isBfMarkersLoaded, setIsBfMarkersLoaded] = useState(() => {
+  try {
+    return !!localStorage.getItem(MARKER_CACHE_KEY);
+  } catch (error) {
+    return false;
+  }
+});
+
+useEffect(() => {
+  try {
+    // 예전에 무거운 사진까지 저장했던 캐시 제거
+    localStorage.removeItem("wheelWorldBfMarkersCache");
+  } catch (error) {
+    console.error("기존 무거운 캐시 삭제 실패:", error);
+  }
+}, []);
 
 useEffect(() => {
   const markersRef = ref(db, "bfMarkers");
 
-  const unsubscribe = onValue(markersRef, (snapshot) => {
-    const data = snapshot.val();
+  const saveCache = (markers) => {
+    try {
+      localStorage.setItem(MARKER_CACHE_KEY, JSON.stringify(markers));
+    } catch (error) {
+      console.error("가벼운 아이콘 캐시 저장 실패:", error);
+    }
+  };
 
-    if (!data) {
-      setBfMarkers([]);
-      setIsBfMarkersLoaded(true);
+  const upsertMarker = (snapshot) => {
+    const value = snapshot.val();
+    const marker = makeLightMarker(snapshot.key, value);
+
+    if (Number.isNaN(marker.lat) || Number.isNaN(marker.lng)) {
       return;
     }
 
-    const markers = Object.entries(data).map(([id, value]) => ({
-      id,
-      ...value,
-    }));
+    setBfMarkers((prev) => {
+      const next = [
+        ...prev.filter((item) => item.id !== marker.id),
+        marker,
+      ].sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
 
-    setBfMarkers(markers);
+      saveCache(next);
+      return next;
+    });
+
+    setIsBfMarkersLoaded(true);
+  };
+
+  const removeMarkerFromState = (snapshot) => {
+    const removedId = snapshot.key;
+
+    setBfMarkers((prev) => {
+      const next = prev.filter((item) => item.id !== removedId);
+      saveCache(next);
+      return next;
+    });
+
+    setIsBfMarkersLoaded(true);
+  };
+
+  const unsubscribeAdded = onChildAdded(markersRef, upsertMarker, (error) => {
+    console.error("아이콘 추가 감지 실패:", error);
     setIsBfMarkersLoaded(true);
   });
 
-  return () => unsubscribe();
+  const unsubscribeChanged = onChildChanged(markersRef, upsertMarker, (error) => {
+    console.error("아이콘 수정 감지 실패:", error);
+    setIsBfMarkersLoaded(true);
+  });
+
+  const unsubscribeRemoved = onChildRemoved(
+    markersRef,
+    removeMarkerFromState,
+    (error) => {
+      console.error("아이콘 삭제 감지 실패:", error);
+      setIsBfMarkersLoaded(true);
+    }
+  );
+
+  const emptyTimer = setTimeout(() => {
+    setIsBfMarkersLoaded(true);
+  }, 1200);
+
+  return () => {
+    clearTimeout(emptyTimer);
+    unsubscribeAdded();
+    unsubscribeChanged();
+    unsubscribeRemoved();
+  };
 }, []);
 
 // App.js 내에 배치
@@ -2927,51 +3130,210 @@ const downloadBfMarkersBackup = async () => {
     return;
   }
 
-  try {
-    const snapshot = await get(ref(db, "bfMarkers"));
-    const data = snapshot.val();
-
-    if (!data) {
-      alert("백업할 아이콘 데이터가 없습니다. Firebase의 bfMarkers 경로를 확인해 주세요.");
-      return;
-    }
-
-    const markers = Object.entries(data).map(([id, value]) => ({
-      id,
-      ...value
-    }));
-
-    const backupData = {
-      backedUpAt: new Date().toISOString(),
-      count: markers.length,
-      bfMarkers: markers,
-      rawBfMarkers: data
-    };
-
-    const json = JSON.stringify(backupData, null, 2);
+  const downloadJsonFile = (data, filename) => {
+    const json = JSON.stringify(data, null, 2);
     const blob = new Blob([json], {
-      type: "application/json"
+      type: "application/json;charset=utf-8",
     });
 
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
 
-    const today = new Date().toISOString().slice(0, 10);
-
     a.href = url;
-    a.download = `wheel-the-world-bfMarkers-backup-${today}.json`;
+    a.download = filename;
 
     document.body.appendChild(a);
     a.click();
 
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
 
-    alert(`${markers.length}개의 아이콘 데이터를 백업했습니다.`);
+  try {
+    const snapshot = await get(ref(db, "bfMarkers"));
+    const data = snapshot.val();
+
+    if (!data) {
+      alert("백업할 아이콘 데이터가 없습니다.");
+      return;
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const entries = Object.entries(data);
+
+    const markerListWithoutImages = [];
+    const imageChunks = [];
+
+    let currentImageChunk = {};
+    let currentChunkSize = 0;
+    const MAX_CHUNK_SIZE = 900000; // 약 0.9MB 단위로 사진 백업 분할
+
+    entries.forEach(([id, value]) => {
+      const { image, ...markerWithoutImage } = value || {};
+
+      markerListWithoutImages.push({
+        id,
+        ...markerWithoutImage,
+        hasImage: !!image || value?.hasImage === true,
+      });
+
+      if (image) {
+        const imageData = {
+          image,
+          backedUpFrom: `bfMarkers/${id}/image`,
+        };
+
+        const imageSize = image.length;
+
+        if (
+          currentChunkSize > 0 &&
+          currentChunkSize + imageSize > MAX_CHUNK_SIZE
+        ) {
+          imageChunks.push(currentImageChunk);
+          currentImageChunk = {};
+          currentChunkSize = 0;
+        }
+
+        currentImageChunk[id] = imageData;
+        currentChunkSize += imageSize;
+      }
+    });
+
+    if (Object.keys(currentImageChunk).length > 0) {
+      imageChunks.push(currentImageChunk);
+    }
+
+    const markerBackup = {
+      backedUpAt: new Date().toISOString(),
+      count: markerListWithoutImages.length,
+      note:
+        "이 파일은 지도용 아이콘 정보 백업입니다. 사진은 별도 image chunk 파일에 나뉘어 저장됩니다.",
+      bfMarkers: markerListWithoutImages,
+    };
+
+    downloadJsonFile(
+      markerBackup,
+      `wheel-the-world-bfMarkers-light-backup-${today}.json`
+    );
+
+    imageChunks.forEach((chunk, index) => {
+      const imageBackup = {
+        backedUpAt: new Date().toISOString(),
+        chunkIndex: index + 1,
+        totalChunks: imageChunks.length,
+        note:
+          "이 파일은 아이콘 사진 백업입니다. key는 bfMarkers의 아이콘 id와 같습니다.",
+        bfMarkerImages: chunk,
+      };
+
+      downloadJsonFile(
+        imageBackup,
+        `wheel-the-world-bfMarker-images-backup-${today}-part-${
+          index + 1
+        }-of-${imageChunks.length}.json`
+      );
+    });
+
+    alert(
+      `${markerListWithoutImages.length}개의 아이콘 정보를 백업했습니다.\n사진 백업 파일은 ${imageChunks.length}개로 나누어 저장됩니다.\n브라우저가 여러 파일 다운로드 허용을 물으면 허용해 주세요.`
+    );
   } catch (error) {
     console.error("백업 실패:", error);
     alert("백업 중 오류가 발생했습니다. 콘솔을 확인해 주세요.");
   }
+};
+const migrateExistingMarkerImages = async () => {
+  if (!isAdminLoggedIn) {
+    alert("관리자만 사진 정리를 할 수 있습니다.");
+    return;
+  }
+
+  const ok = window.confirm(
+    "기존 아이콘 사진을 새 저장 위치로 옮깁니다.\n\n" +
+      "반드시 Firebase 콘솔에서 JSON 백업을 먼저 했을 때만 진행하세요.\n\n" +
+      "진행할까요?"
+  );
+
+  if (!ok) return;
+
+  const markersRef = ref(db, "bfMarkers");
+
+  let scannedCount = 0;
+  let migratedCount = 0;
+  let skippedCount = 0;
+  let failedCount = 0;
+  let finished = false;
+  let idleTimer = null;
+  let unsubscribe = null;
+
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+
+    if (unsubscribe) {
+      unsubscribe();
+    }
+
+    alert(
+      "사진 정리가 끝났습니다.\n\n" +
+        `확인한 아이콘: ${scannedCount}개\n` +
+        `옮긴 사진: ${migratedCount}개\n` +
+        `이미 정리됨/사진 없음: ${skippedCount}개\n` +
+        `실패: ${failedCount}개`
+    );
+  };
+
+  unsubscribe = onChildAdded(
+    markersRef,
+    async (snapshot) => {
+      if (idleTimer) {
+        clearTimeout(idleTimer);
+      }
+
+      scannedCount += 1;
+
+      const id = snapshot.key;
+      const value = snapshot.val() || {};
+
+      try {
+        if (!value.image) {
+          skippedCount += 1;
+        } else {
+          const existingNewImageSnapshot = await get(
+            ref(db, `bfMarkerImages/${id}/image`)
+          );
+
+          if (!existingNewImageSnapshot.exists()) {
+            await set(ref(db, `bfMarkerImages/${id}`), {
+              image: value.image,
+              updatedAt: Date.now(),
+              migratedFrom: `bfMarkers/${id}/image`,
+            });
+          }
+
+          await update(ref(db, `bfMarkers/${id}`), {
+            image: null,
+            hasImage: true,
+            imageMigratedAt: Date.now(),
+          });
+
+          migratedCount += 1;
+        }
+      } catch (error) {
+        console.error("사진 정리 실패:", id, error);
+        failedCount += 1;
+      }
+
+      idleTimer = setTimeout(finish, 2500);
+    },
+    (error) => {
+      console.error("사진 정리 중 오류:", error);
+      failedCount += 1;
+      finish();
+    }
+  );
+
+  idleTimer = setTimeout(finish, 2500);
 };
 // 💡 관리자 로그인 성공 여부를 저장하는 상태 (기본값은 false)
 const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
@@ -3677,6 +4039,136 @@ useEffect(() => {
 
   return () => unsubscribe();
 }, []);
+const migrateExistingMarkerImagesNow = async () => {
+  if (!isAdminLoggedIn) {
+    alert("관리자 로그인 후 실행해야 합니다.");
+    return;
+  }
+
+  const ok = window.confirm(
+    "기존 아이콘 사진을 새 저장 위치로 옮깁니다.\n\n" +
+      "Firebase 콘솔에서 JSON 백업을 먼저 했다면 확인을 눌러 주세요.\n\n" +
+      "복사 성공이 확인된 사진만 기존 위치에서 삭제합니다."
+  );
+
+  if (!ok) return;
+
+  const markersRef = ref(db, "bfMarkers");
+
+  let scannedCount = 0;
+  let migratedCount = 0;
+  let skippedCount = 0;
+  let failedCount = 0;
+
+  let finished = false;
+  let idleTimer = null;
+  let unsubscribe = null;
+
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+
+    if (idleTimer) {
+      clearTimeout(idleTimer);
+    }
+
+    if (unsubscribe) {
+      unsubscribe();
+    }
+
+    console.log("사진 이동 완료", {
+      scannedCount,
+      migratedCount,
+      skippedCount,
+      failedCount,
+    });
+
+    alert(
+      "사진 이동이 끝났습니다.\n\n" +
+        `확인한 아이콘: ${scannedCount}개\n` +
+        `옮긴 사진: ${migratedCount}개\n` +
+        `건너뜀: ${skippedCount}개\n` +
+        `실패: ${failedCount}개`
+    );
+  };
+
+  const resetFinishTimer = () => {
+    if (idleTimer) {
+      clearTimeout(idleTimer);
+    }
+
+    idleTimer = setTimeout(finish, 6000);
+  };
+
+  unsubscribe = onChildAdded(
+    markersRef,
+    async (snapshot) => {
+      resetFinishTimer();
+
+      const id = snapshot.key;
+      const value = snapshot.val() || {};
+
+      scannedCount += 1;
+
+      try {
+        if (!value.image) {
+          skippedCount += 1;
+          return;
+        }
+
+        const oldImage = value.image;
+
+        const alreadyMovedSnapshot = await get(
+          ref(db, `bfMarkerImages/${id}/image`)
+        );
+
+        if (!alreadyMovedSnapshot.exists()) {
+          await set(ref(db, `bfMarkerImages/${id}`), {
+            image: oldImage,
+            updatedAt: Date.now(),
+            migratedFrom: `bfMarkers/${id}/image`,
+          });
+        }
+
+        const verifySnapshot = await get(
+          ref(db, `bfMarkerImages/${id}/image`)
+        );
+
+        if (!verifySnapshot.exists()) {
+          throw new Error("복사 확인 실패");
+        }
+
+        await update(ref(db, `bfMarkers/${id}`), {
+          image: null,
+          hasImage: true,
+          imageMigratedAt: Date.now(),
+        });
+
+        migratedCount += 1;
+        console.log(`사진 이동 성공: ${id}`);
+      } catch (error) {
+        failedCount += 1;
+        console.error(`사진 이동 실패: ${id}`, error);
+      } finally {
+        resetFinishTimer();
+      }
+    },
+    (error) => {
+      failedCount += 1;
+      console.error("사진 이동 전체 오류:", error);
+      finish();
+    }
+  );
+
+  resetFinishTimer();
+};
+useEffect(() => {
+  window.migrateWheelWorldImages = migrateExistingMarkerImagesNow;
+
+  return () => {
+    delete window.migrateWheelWorldImages;
+  };
+}, [isAdminLoggedIn]);
 const renderHeader = () => (
   <div
     style={{
@@ -3761,23 +4253,7 @@ const renderHeader = () => (
         ✍️
       </button>
 
-      {isAdminLoggedIn && (
-        <button
-          onClick={downloadBfMarkersBackup}
-          style={{
-            padding: "8px 10px",
-            border: "none",
-            borderRadius: "8px",
-            background: "#DCFCE7",
-            color: "#166534",
-            fontSize: "12px",
-            fontWeight: "700",
-            cursor: "pointer",
-          }}
-        >
-          백업
-        </button>
-      )}
+     
 
       {isAdminLoggedIn && (
         <button
