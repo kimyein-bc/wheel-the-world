@@ -910,7 +910,7 @@ useEffect(() => {
           height: "100%",
         }}
       />
-
+{isAdminLoggedIn && (
       <div
         style={{
           position: "absolute",
@@ -928,6 +928,7 @@ useEffect(() => {
       >
         이동장애 요소 {bfMarkers.length}개 표시 중
       </div>
+      )}
       {selectedMarker && (
   <div
     style={{
@@ -1757,23 +1758,7 @@ useEffect(() => {
         }}
       />
 
-      <div
-        style={{
-          position: "absolute",
-          left: "12px",
-          top: "12px",
-          zIndex: 10,
-          background: "rgba(255,255,255,0.94)",
-          borderRadius: "999px",
-          padding: "8px 12px",
-          fontSize: "12px",
-          fontWeight: "900",
-          color: "#334155",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-        }}
-      >
-        지도에서 위치를 더블클릭해 제보하기
-      </div>
+      
       {selectedCreateMarker && (
   <div
     style={{
@@ -3114,6 +3099,24 @@ const handleSearchPlace = async () => {
 const [searchKeyword, setSearchKeyword] = useState("");
 const [searchSuggestions, setSearchSuggestions] = useState([]);
 const [newMarkerType, setNewMarkerType] = useState("step");
+const [hiddenMarkerTypes, setHiddenMarkerTypes] = useState([]);
+const [isMarkerFilterOpen, setIsMarkerFilterOpen] = useState(false);
+const isMarkerTypeVisible = (marker) => {
+  if (!marker?.type) return true;
+  return !hiddenMarkerTypes.includes(marker.type);
+};
+
+const toggleMarkerTypeVisibility = (type) => {
+  setHiddenMarkerTypes((prev) =>
+    prev.includes(type)
+      ? prev.filter((item) => item !== type)
+      : [...prev, type]
+  );
+};
+
+const showAllMarkerTypes = () => {
+  setHiddenMarkerTypes([]);
+};
 const [newMarkerDesc, setNewMarkerDesc] = useState("");
 const [newMarkerImage, setNewMarkerImage] = useState(null);
 // 5가지 안전/위험 요소 디자인 구성 설정
@@ -3151,10 +3154,19 @@ const getBfConfig = (type) => {
 };
 const mapRef = useRef(null);
 const surveyWatchRef = useRef(null);
+const liveLocationWatchRef = useRef(null);
   const [currentView, setCurrentView] = useState("home");
   const [markers, setMarkers] = useState([]);
   const [selectedType, setSelectedType] = useState("step");
   const [userLocation, setUserLocation] = useState(null);
+  const [isNavigationActive, setIsNavigationActive] = useState(false);
+const [isNavigationFinished, setIsNavigationFinished] = useState(false);
+const [distanceToDestination, setDistanceToDestination] = useState(null);
+const [navigationMessage, setNavigationMessage] = useState("");
+const [showNavigationFeedback, setShowNavigationFeedback] = useState(false);
+const [navigationFeedbackRating, setNavigationFeedbackRating] = useState(0);
+const [navigationFeedbackComment, setNavigationFeedbackComment] = useState("");
+const [isSavingNavigationFeedback, setIsSavingNavigationFeedback] = useState(false);
   const [deviceHeading, setDeviceHeading] = useState(null);
   const compassHandlerRef = useRef(null);
   const isCompassTrackingRef = useRef(false);
@@ -3818,6 +3830,12 @@ setRouteInfo({
     // 🔥 4. 지도 경로 저장
     setRouteSteps(route);
 
+stopLiveLocationTracking();
+setIsNavigationActive(false);
+setIsNavigationFinished(false);
+setNavigationMessage("");
+setDistanceToDestination(null);
+
     // 🔥 5. 안내문 처리
     let guide = ["📍 출발지에서 이동 시작"];
     // 고정 예시 조합일 때만 특수 안내문 띄우기
@@ -3957,54 +3975,316 @@ const startCompassTracking = async () => {
     console.error("방향 센서 권한 오류:", error);
   }
 };
-// setPoint 파라미터를 추가합니다. (예: setStartPoint 또는 setEndPoint)
-const moveToMyLocation = async (setPoint, setCoords) => {
+const toLatLngObject = (position) => {
+  if (!position) return null;
+
+  const lat = Array.isArray(position)
+    ? Number(position[0])
+    : Number(position.lat);
+
+  const lng = Array.isArray(position)
+    ? Number(position[1])
+    : Number(position.lng);
+
+  if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+
+  return { lat, lng };
+};
+
+const getDistanceMeters = (a, b) => {
+  const pointA = toLatLngObject(a);
+  const pointB = toLatLngObject(b);
+
+  if (!pointA || !pointB) return Infinity;
+
+  const R = 6371000;
+  const lat1 = (pointA.lat * Math.PI) / 180;
+  const lat2 = (pointB.lat * Math.PI) / 180;
+  const dLat = ((pointB.lat - pointA.lat) * Math.PI) / 180;
+  const dLng = ((pointB.lng - pointA.lng) * Math.PI) / 180;
+
+  const h =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1) *
+      Math.cos(lat2) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+
+  return 2 * R * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+};
+
+const findNearestPointOnRoute = (rawPosition, route = []) => {
+  const raw = toLatLngObject(rawPosition);
+
+  if (!raw || !route || route.length < 2) {
+    return null;
+  }
+
+  let bestPoint = null;
+  let bestDistance = Infinity;
+
+  for (let i = 0; i < route.length - 1; i += 1) {
+    const start = toLatLngObject(route[i]);
+    const end = toLatLngObject(route[i + 1]);
+
+    if (!start || !end) continue;
+
+    const lat0 = (raw.lat * Math.PI) / 180;
+
+    const project = (p) => ({
+      x: p.lng * Math.cos(lat0) * 111320,
+      y: p.lat * 110540,
+    });
+
+    const rawP = project(raw);
+    const startP = project(start);
+    const endP = project(end);
+
+    const dx = endP.x - startP.x;
+    const dy = endP.y - startP.y;
+    const lengthSq = dx * dx + dy * dy;
+
+    if (lengthSq === 0) continue;
+
+    const t = Math.max(
+      0,
+      Math.min(
+        1,
+        ((rawP.x - startP.x) * dx + (rawP.y - startP.y) * dy) / lengthSq
+      )
+    );
+
+    const nearest = {
+      lat: start.lat + (end.lat - start.lat) * t,
+      lng: start.lng + (end.lng - start.lng) * t,
+    };
+
+    const distance = getDistanceMeters(raw, nearest);
+
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestPoint = nearest;
+    }
+  }
+
+  if (!bestPoint) return null;
+
+  return {
+    ...bestPoint,
+    distance: bestDistance,
+  };
+};
+const stopLiveLocationTracking = () => {
+  if (liveLocationWatchRef.current !== null) {
+    navigator.geolocation.clearWatch(liveLocationWatchRef.current);
+    liveLocationWatchRef.current = null;
+  }
+};
+
+const stopNavigation = () => {
+  stopLiveLocationTracking();
+
+  setIsNavigationActive(false);
+  setIsNavigationFinished(false);
+  setNavigationMessage("");
+  setDistanceToDestination(null);
+};
+const finishNavigationAndOpenFeedback = () => {
+  stopNavigation();
+
+  setNavigationFeedbackRating(0);
+  setNavigationFeedbackComment("");
+  setShowNavigationFeedback(true);
+};
+
+const saveNavigationFeedback = async () => {
+  if (!navigationFeedbackRating) {
+    alert("별점을 선택해 주세요.");
+    return;
+  }
+
+  try {
+    setIsSavingNavigationFeedback(true);
+
+    await push(ref(db, "routeFeedbacks"), {
+      rating: Number(navigationFeedbackRating),
+      comment: navigationFeedbackComment.trim(),
+      createdAt: Date.now(),
+      createdAtText: new Date().toLocaleString(),
+      clientId: getWheelWorldClientId(),
+
+      routeSummary: {
+        distance: routeInfo?.distance || null,
+        duration: routeInfo?.duration || null,
+        obstacleCount: routeInfo?.obstacleCount ?? null,
+      },
+
+      startMarkerPos: startMarkerPos
+        ? {
+            lat: Array.isArray(startMarkerPos)
+              ? Number(startMarkerPos[0])
+              : Number(startMarkerPos.lat),
+            lng: Array.isArray(startMarkerPos)
+              ? Number(startMarkerPos[1])
+              : Number(startMarkerPos.lng),
+          }
+        : null,
+
+      endMarkerPos: endMarkerPos
+        ? {
+            lat: Array.isArray(endMarkerPos)
+              ? Number(endMarkerPos[0])
+              : Number(endMarkerPos.lat),
+            lng: Array.isArray(endMarkerPos)
+              ? Number(endMarkerPos[1])
+              : Number(endMarkerPos.lng),
+          }
+        : null,
+    });
+
+    alert("의견이 저장되었습니다. 감사합니다!");
+    setShowNavigationFeedback(false);
+    setNavigationFeedbackRating(0);
+    setNavigationFeedbackComment("");
+  } catch (error) {
+    console.error("경로 후기 저장 실패:", error);
+    alert("의견 저장 중 오류가 발생했습니다.");
+  } finally {
+    setIsSavingNavigationFeedback(false);
+  }
+};
+const startLiveLocationTracking = async ({
+  navigationMode = false,
+  route = [],
+  destination = null,
+  centerMap = true,
+  onFirstLocation = null,
+} = {}) => {
   await startCompassTracking();
+
   if (!navigator.geolocation) {
     alert("이 브라우저에서는 GPS를 지원하지 않습니다.");
     return;
   }
 
-  navigator.geolocation.getCurrentPosition(
-    async (position) => {
-      const lat = position.coords.latitude;
-      const lng = position.coords.longitude;
-      const myLocation = [lat, lng];
+  stopLiveLocationTracking();
+
+  let hasFirstLocation = false;
+
+  if (navigationMode) {
+    setIsNavigationActive(true);
+    setIsNavigationFinished(false);
+    setNavigationMessage("안내를 시작합니다.");
+  }
+
+  const handlePosition = (position) => {
+    const rawLocation = {
+      lat: position.coords.latitude,
+      lng: position.coords.longitude,
+    };
+
+    if (!hasFirstLocation) {
+      hasFirstLocation = true;
+
+      if (typeof onFirstLocation === "function") {
+        onFirstLocation(rawLocation);
+      }
+    }
+
+    let displayLocation = rawLocation;
+
+    if (navigationMode && route && route.length >= 2) {
+      const nearest = findNearestPointOnRoute(rawLocation, route);
+
+      // GPS가 경로에서 너무 멀리 튀면 실제 위치를 보여주고,
+      // 경로 근처면 파란 점을 경로선 위에 붙여서 보여줌.
+      if (nearest && nearest.distance <= 35) {
+        displayLocation = {
+          lat: nearest.lat,
+          lng: nearest.lng,
+        };
+      }
+    }
+
+    setUserLocation([displayLocation.lat, displayLocation.lng]);
+    setIsFollowingUser(true);
+
+    if (centerMap && mapRef.current) {
+      const nextCenter = [displayLocation.lat, displayLocation.lng];
+
+      if (typeof mapRef.current.setView === "function") {
+        mapRef.current.setView(nextCenter, 17);
+      } else if (typeof mapRef.current.flyTo === "function") {
+        mapRef.current.flyTo(nextCenter, 17);
+      }
+    }
+
+    if (navigationMode && destination) {
+      const distance = getDistanceMeters(rawLocation, destination);
+      const roundedDistance = Math.round(distance);
+
+      setDistanceToDestination(roundedDistance);
+
+      if (distance <= 20) {
+        stopLiveLocationTracking();
+
+        setIsNavigationActive(false);
+        setIsNavigationFinished(true);
+        setNavigationMessage("도착했습니다.");
+        setDistanceToDestination(0);
+
+        alert("목적지 근처에 도착했습니다.");
+      } else {
+        setNavigationMessage(`안내 중 · 도착까지 약 ${roundedDistance}m`);
+      }
+    }
+  };
+
+  const handleError = (error) => {
+    console.error("실시간 위치 추적 오류:", error);
+    alert("현재 위치를 계속 추적할 수 없습니다. 위치 권한을 확인해 주세요.");
+    stopLiveLocationTracking();
+    setIsNavigationActive(false);
+  };
+
+  liveLocationWatchRef.current = navigator.geolocation.watchPosition(
+    handlePosition,
+    handleError,
+    {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 1000,
+    }
+  );
+};
+// setPoint 파라미터를 추가합니다. (예: setStartPoint 또는 setEndPoint)
+const moveToMyLocation = async (setPoint, setCoords) => {
+  await startLiveLocationTracking({
+    navigationMode: false,
+    centerMap: true,
+    onFirstLocation: (rawLocation) => {
+      const myLocation = [rawLocation.lat, rawLocation.lng];
 
       setUserLocation(myLocation);
 
-if (setCoords) {
-  const coords = {
-    lat,
-    lng,
-  };
-
-
-  setCoords(coords);
-}
-      setIsFollowingUser(true);
-
-      if (mapRef.current) {
-        mapRef.current.flyTo(myLocation, 17, { duration: 1.5 });
+      if (setCoords) {
+        setCoords({
+          lat: rawLocation.lat,
+          lng: rawLocation.lng,
+        });
       }
 
-      // --- 📍 수정된 부분: 주소 변환 안 하고 '내 위치'라고만 적기 ---
       if (typeof setPoint === "function") {
-  setPoint("내 위치");
-}
-      // ----------------------------------------------------
-
-      setTimeout(() => {
-        setIsFollowingUser(false);
-      }, 3000);
+        setPoint("내 위치");
+      }
     },
-    (error) => {
-      console.error(error);
-      alert("현재 위치를 가져올 수 없습니다.");
-    },
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-  );
+  });
 };
+useEffect(() => {
+  return () => {
+    stopLiveLocationTracking();
+  };
+}, []);
 function MapSetter({ mapRef }) {
   const map = useMap();
   useEffect(() => {
@@ -4283,6 +4563,219 @@ useEffect(() => {
     delete window.migrateWheelWorldImages;
   };
 }, [isAdminLoggedIn]);
+const renderMarkerTypeFilter = () => {
+  const typeEntries = Object.entries(bfConfig || {});
+
+  if (typeEntries.length === 0) return null;
+
+  const totalCount = typeEntries.length;
+  const visibleCount = totalCount - hiddenMarkerTypes.length;
+  const isAllVisible = hiddenMarkerTypes.length === 0;
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: "12px",
+        left: "12px",
+        zIndex: 60,
+        pointerEvents: "auto",
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setIsMarkerFilterOpen((prev) => !prev)}
+        style={{
+          border: "none",
+          borderRadius: "999px",
+          padding: "9px 13px",
+          background: "rgba(15,23,42,0.88)",
+          color: "white",
+          fontSize: "12px",
+          fontWeight: "900",
+          boxShadow: "0 6px 18px rgba(15,23,42,0.22)",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+          backdropFilter: "blur(8px)",
+        }}
+      >
+        <span>표시</span>
+        <span
+          style={{
+            background: "rgba(255,255,255,0.18)",
+            borderRadius: "999px",
+            padding: "2px 7px",
+            fontSize: "11px",
+          }}
+        >
+          {visibleCount}/{totalCount}
+        </span>
+      </button>
+
+      {isMarkerFilterOpen && (
+        <div
+          style={{
+            marginTop: "8px",
+            width: "min(300px, calc(100vw - 24px))",
+            background: "rgba(255,255,255,0.97)",
+            borderRadius: "18px",
+            padding: "12px",
+            boxShadow: "0 14px 34px rgba(15,23,42,0.22)",
+            border: "1px solid rgba(226,232,240,0.9)",
+            backdropFilter: "blur(10px)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: "10px",
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontSize: "13px",
+                  fontWeight: "900",
+                  color: "#0F172A",
+                }}
+              >
+                표시할 아이콘
+              </div>
+              <div
+                style={{
+                  fontSize: "11px",
+                  color: "#64748B",
+                  marginTop: "2px",
+                }}
+              >
+                보고 싶은 장애물만 선택하세요
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsMarkerFilterOpen(false)}
+              style={{
+                border: "none",
+                background: "#F1F5F9",
+                color: "#475569",
+                borderRadius: "999px",
+                width: "28px",
+                height: "28px",
+                fontSize: "16px",
+                fontWeight: "900",
+                cursor: "pointer",
+                lineHeight: "28px",
+              }}
+            >
+              ×
+            </button>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "7px",
+              maxHeight: "190px",
+              overflowY: "auto",
+              paddingRight: "2px",
+            }}
+          >
+            {typeEntries.map(([type, info]) => {
+  const isVisible = !hiddenMarkerTypes.includes(type);
+
+  const iconText = info.icon || "";
+  const labelText = String(info.label || type)
+    .split(iconText)
+    .join("")
+    .trim();
+
+  return (
+    <button
+      key={type}
+      type="button"
+      onClick={() => toggleMarkerTypeVisibility(type)}
+      style={{
+        border: isVisible
+          ? `1.5px solid ${info.color || "#2563EB"}`
+          : "1.5px solid #E2E8F0",
+        background: isVisible
+          ? `${info.color || "#2563EB"}`
+          : "#F8FAFC",
+        color: isVisible ? "white" : "#64748B",
+        borderRadius: "13px",
+        padding: "9px 8px",
+        fontSize: "12px",
+        fontWeight: "900",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "5px",
+        opacity: isVisible ? 1 : 0.72,
+      }}
+    >
+      <span>{iconText}</span>
+      <span>{labelText}</span>
+    </button>
+  );
+})}
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "8px",
+              marginTop: "11px",
+            }}
+          >
+            <button
+              type="button"
+              onClick={showAllMarkerTypes}
+              disabled={isAllVisible}
+              style={{
+                flex: 1,
+                border: "none",
+                borderRadius: "12px",
+                padding: "9px 10px",
+                background: isAllVisible ? "#E2E8F0" : "#DBEAFE",
+                color: isAllVisible ? "#94A3B8" : "#1D4ED8",
+                fontSize: "12px",
+                fontWeight: "900",
+                cursor: isAllVisible ? "default" : "pointer",
+              }}
+            >
+              전체 보기
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setHiddenMarkerTypes(typeEntries.map(([type]) => type))}
+              style={{
+                flex: 1,
+                border: "none",
+                borderRadius: "12px",
+                padding: "9px 10px",
+                background: "#FEE2E2",
+                color: "#B91C1C",
+                fontSize: "12px",
+                fontWeight: "900",
+                cursor: "pointer",
+              }}
+            >
+              모두 숨김
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 const renderHeader = () => (
   <div
     style={{
@@ -5078,38 +5571,278 @@ return (
               height: isMobile ? "calc(100vh - 250px)" : "100%" 
             }}>
               
-             {routeInfo && (
+            {routeInfo && (
   <div
     style={{
       position: "absolute",
       top: "12px",
       left: "50%",
       transform: "translateX(-50%)",
-      zIndex: 1000,
+      zIndex: 30,
+      pointerEvents: "none",
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
       gap: "8px",
-      width: isMobile ? "calc(100% - 24px)" : "auto",
-      pointerEvents: "none",
+    }}
+  >
+    {(() => {
+      const totalDistanceKm = Number(routeInfo.distance || 0);
+      const totalDistanceM = totalDistanceKm * 1000;
+      const totalDurationMin = Number(routeInfo.duration || 0);
+
+      const remainingDistanceM =
+        typeof distanceToDestination === "number"
+          ? distanceToDestination
+          : null;
+
+      const remainingDistanceKm =
+        remainingDistanceM !== null
+          ? (remainingDistanceM / 1000).toFixed(1)
+          : null;
+
+      const remainingDurationMin =
+        remainingDistanceM !== null &&
+        totalDistanceM > 0 &&
+        totalDurationMin > 0
+          ? Math.max(
+              1,
+              Math.round((remainingDistanceM / totalDistanceM) * totalDurationMin)
+            )
+          : null;
+
+      const isGuiding =
+        (isNavigationActive || isNavigationFinished) &&
+        remainingDistanceM !== null;
+
+      return (
+        <div
+          style={{
+            background: "rgba(255,255,255,0.96)",
+            padding: "10px 16px",
+            borderRadius: "999px",
+            boxShadow: "0 8px 20px rgba(15,23,42,0.18)",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            fontSize: "14px",
+            fontWeight: "800",
+            color: "#0F172A",
+            pointerEvents: "none",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {isGuiding ? (
+            <>
+              <span style={{ color: "#1D4ED8", fontWeight: "900" }}>
+                안내 중
+              </span>
+              <span>📍 {remainingDistanceKm}km</span>
+              <span>⏱ {remainingDurationMin}분</span>
+            </>
+          ) : (
+            <>
+              <span>이동장애 요소 {routeInfo.obstacleCount ?? 0}</span>
+              <span>📍 {routeInfo.distance}km</span>
+              <span>⏱ {routeInfo.duration}분</span>
+            </>
+          )}
+        </div>
+      );
+    })()}
+    {routeSteps.length > 0 && !isNavigationActive && !isNavigationFinished && (
+  <button
+    type="button"
+    onClick={() => {
+      if (!endMarkerPos) {
+        alert("목적지를 먼저 설정해 주세요.");
+        return;
+      }
+
+      startLiveLocationTracking({
+        navigationMode: true,
+        route: routeSteps,
+        destination: endMarkerPos,
+        centerMap: true,
+      });
+    }}
+    style={{
+      pointerEvents: "auto",
+      border: "none",
+      borderRadius: "999px",
+      padding: "8px 16px",
+      background: "#2563EB",
+      color: "white",
+      fontSize: "13px",
+      fontWeight: "900",
+      boxShadow: "0 4px 12px rgba(0,0,0,0.18)",
+      cursor: "pointer",
+    }}
+  >
+    안내 시작
+  </button>
+)}
+
+    {(isNavigationActive || isNavigationFinished) && (
+      <button
+        type="button"
+        onClick={finishNavigationAndOpenFeedback}
+        style={{
+          pointerEvents: "auto",
+          border: "none",
+          borderRadius: "999px",
+          padding: "8px 16px",
+          background: isNavigationFinished ? "#16A34A" : "#EF4444",
+          color: "white",
+          fontSize: "13px",
+          fontWeight: "900",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.18)",
+          cursor: "pointer",
+        }}
+      >
+        안내 종료
+      </button>
+    )}
+  </div>
+)}
+{showNavigationFeedback && (
+  <div
+    style={{
+      position: "fixed",
+      inset: 0,
+      zIndex: 9999,
+      background: "rgba(15,23,42,0.45)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "18px",
     }}
   >
     <div
       style={{
-        background: "rgba(255,255,255,0.95)",
-        backdropFilter: "blur(8px)",
-        padding: "8px 16px",
-        borderRadius: "999px",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
-        display: "flex",
-        gap: "18px",
-        fontWeight: "600",
-        fontSize: "14px",
-        pointerEvents: "auto",
+        width: "100%",
+        maxWidth: "360px",
+        background: "white",
+        borderRadius: "20px",
+        padding: "20px",
+        boxShadow: "0 20px 50px rgba(0,0,0,0.25)",
       }}
     >
-      <span>📏 {routeInfo.distance}km</span>
-      <span>⏱ {routeInfo.duration}분</span>
+      <div
+        style={{
+          fontSize: "18px",
+          fontWeight: "900",
+          color: "#0F172A",
+          marginBottom: "6px",
+        }}
+      >
+        경로 안내는 어땠나요?
+      </div>
+
+      <div
+        style={{
+          fontSize: "13px",
+          color: "#64748B",
+          lineHeight: 1.5,
+          marginBottom: "14px",
+        }}
+      >
+        별점과 간단한 의견을 남겨주시면 경로 추천 개선에 활용됩니다.
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          gap: "6px",
+          marginBottom: "14px",
+        }}
+      >
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button
+            key={star}
+            type="button"
+            onClick={() => setNavigationFeedbackRating(star)}
+            style={{
+              border: "none",
+              background: "transparent",
+              fontSize: "30px",
+              cursor: "pointer",
+              padding: "2px",
+              filter:
+                star <= navigationFeedbackRating
+                  ? "none"
+                  : "grayscale(1)",
+              opacity: star <= navigationFeedbackRating ? 1 : 0.35,
+            }}
+          >
+            ⭐
+          </button>
+        ))}
+      </div>
+
+      <textarea
+        value={navigationFeedbackComment}
+        onChange={(e) => setNavigationFeedbackComment(e.target.value)}
+        placeholder="예: 경로는 좋았는데 중간에 턱이 하나 있었어요."
+        rows={4}
+        style={{
+          width: "100%",
+          boxSizing: "border-box",
+          border: "1px solid #CBD5E1",
+          borderRadius: "12px",
+          padding: "12px",
+          fontSize: "14px",
+          resize: "none",
+          outline: "none",
+          marginBottom: "14px",
+        }}
+      />
+
+      <div
+        style={{
+          display: "flex",
+          gap: "8px",
+          justifyContent: "flex-end",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setShowNavigationFeedback(false);
+            setNavigationFeedbackRating(0);
+            setNavigationFeedbackComment("");
+          }}
+          style={{
+            border: "none",
+            borderRadius: "10px",
+            padding: "10px 12px",
+            background: "#E2E8F0",
+            color: "#334155",
+            fontWeight: "900",
+            cursor: "pointer",
+          }}
+        >
+          건너뛰기
+        </button>
+
+        <button
+          type="button"
+          disabled={isSavingNavigationFeedback}
+          onClick={saveNavigationFeedback}
+          style={{
+            border: "none",
+            borderRadius: "10px",
+            padding: "10px 14px",
+            background: "#2563EB",
+            color: "white",
+            fontWeight: "900",
+            cursor: isSavingNavigationFeedback ? "not-allowed" : "pointer",
+            opacity: isSavingNavigationFeedback ? 0.6 : 1,
+          }}
+        >
+          {isSavingNavigationFeedback ? "저장 중..." : "의견 저장"}
+        </button>
+      </div>
     </div>
   </div>
 )}
@@ -5136,30 +5869,33 @@ return (
     지도 아이콘 불러오는 중...
   </div>
 ) : (
-  <KakaoMapTest
-    key={`search-map-${bfMarkers.length}`}
-    bfMarkers={bfMarkers.filter(
-      (m) => m.status === "approved" || m.isOfficial === true
-    )}
-    routeSteps={routeSteps}
-    startMarkerPos={startMarkerPos}
-    endMarkerPos={endMarkerPos}
-    userLocation={userLocation}
-    deviceHeading={deviceHeading}
-    mapRef={mapRef}
-    isAdminLoggedIn={isAdminLoggedIn}
-    tempMarker={tempMarker}
-    setTempMarker={setTempMarker}
-    newMarkerType={newMarkerType}
-    setNewMarkerType={setNewMarkerType}
-    newMarkerDesc={newMarkerDesc}
-    setNewMarkerDesc={setNewMarkerDesc}
-    newMarkerImage={newMarkerImage}
-    setNewMarkerImage={setNewMarkerImage}
-    bfConfig={bfConfig}
-    wheelLevel={wheelLevel}
-    setWheelLevel={setWheelLevel}
-  />
+  <>
+    {renderMarkerTypeFilter()}
+
+    <KakaoMapTest
+  bfMarkers={bfMarkers
+    .filter((m) => m.status === "approved" || m.isOfficial === true)
+    .filter(isMarkerTypeVisible)}
+      routeSteps={routeSteps}
+      startMarkerPos={startMarkerPos}
+      endMarkerPos={endMarkerPos}
+      userLocation={userLocation}
+      deviceHeading={deviceHeading}
+      mapRef={mapRef}
+      isAdminLoggedIn={isAdminLoggedIn}
+      tempMarker={tempMarker}
+      setTempMarker={setTempMarker}
+      newMarkerType={newMarkerType}
+      setNewMarkerType={setNewMarkerType}
+      newMarkerDesc={newMarkerDesc}
+      setNewMarkerDesc={setNewMarkerDesc}
+      newMarkerImage={newMarkerImage}
+      setNewMarkerImage={setNewMarkerImage}
+      bfConfig={bfConfig}
+      wheelLevel={wheelLevel}
+      setWheelLevel={setWheelLevel}
+    />
+  </>
 )}
 </div>
 
@@ -5288,7 +6024,7 @@ return (
 
 
  <p style={{ fontSize: "12px", color: "#666" }}>
-  📍 지도에서 제보할 위치를 클릭하세요.
+  📍 지도에서 제보할 위치를 더블 클릭하세요.
 </p>
 
 </div>
@@ -5373,26 +6109,29 @@ return (
     지도 아이콘 불러오는 중...
   </div>
 ) : (
-  <KakaoCreateMap
-    key={`create-map-${bfMarkers.length}`}
-    bfMarkers={bfMarkers}
-    userLocation={userLocation}
-    deviceHeading={deviceHeading}
-    mapRef={mapRef}
-    userRole={userRole}
-    isAdminLoggedIn={isAdminLoggedIn}
-    tempMarker={tempMarker}
-    setTempMarker={setTempMarker}
-    newMarkerType={newMarkerType}
-    setNewMarkerType={setNewMarkerType}
-    newMarkerDesc={newMarkerDesc}
-    setNewMarkerDesc={setNewMarkerDesc}
-    newMarkerImage={newMarkerImage}
-    setNewMarkerImage={setNewMarkerImage}
-    bfConfig={bfConfig}
-    wheelLevel={wheelLevel}
-    setWheelLevel={setWheelLevel}
-  />
+  <>
+    {renderMarkerTypeFilter()}
+
+    <KakaoCreateMap
+      bfMarkers={bfMarkers.filter(isMarkerTypeVisible)}
+      userLocation={userLocation}
+      deviceHeading={deviceHeading}
+      mapRef={mapRef}
+      userRole={userRole}
+      isAdminLoggedIn={isAdminLoggedIn}
+      tempMarker={tempMarker}
+      setTempMarker={setTempMarker}
+      newMarkerType={newMarkerType}
+      setNewMarkerType={setNewMarkerType}
+      newMarkerDesc={newMarkerDesc}
+      setNewMarkerDesc={setNewMarkerDesc}
+      newMarkerImage={newMarkerImage}
+      setNewMarkerImage={setNewMarkerImage}
+      bfConfig={bfConfig}
+      wheelLevel={wheelLevel}
+      setWheelLevel={setWheelLevel}
+    />
+  </>
 )}
       </div>
     </div>
