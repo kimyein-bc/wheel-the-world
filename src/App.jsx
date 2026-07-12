@@ -310,9 +310,11 @@ const KakaoMapTest = ({
   const polylineRef = useRef(null);
   const routeOverlayRefs = useRef([]);
   const userLocationOverlayRef = useRef(null);
+  const officialTempOverlayRef = useRef(null);
   const wheelOverlayRef = useRef(null);
 const wheelAnimationRef = useRef(null);
  const [selectedMarker, setSelectedMarker] = useState(null);
+ const [editingOfficialMarkerId, setEditingOfficialMarkerId] = useState(null);
 const [isKakaoMapReady, setIsKakaoMapReady] = useState(false);
 const isAdminLoggedInRef = useRef(isAdminLoggedIn);
 const latestBfMarkersRef = useRef(bfMarkers);
@@ -408,6 +410,50 @@ const fitKakaoMapBounds = (positions = []) => {
     });
     overlayRefs.current = [];
   };
+  const clearOfficialTempOverlay = () => {
+  if (officialTempOverlayRef.current) {
+    officialTempOverlayRef.current.setMap(null);
+    officialTempOverlayRef.current = null;
+  }
+};
+
+const drawOfficialTempMarker = (kakao, map) => {
+  clearOfficialTempOverlay();
+
+  if (!tempMarker) return;
+
+  const lat = Number(tempMarker.lat);
+  const lng = Number(tempMarker.lng);
+
+  if (Number.isNaN(lat) || Number.isNaN(lng)) return;
+
+  const wrapper = document.createElement("div");
+
+  wrapper.style.width = "46px";
+  wrapper.style.height = "46px";
+  wrapper.style.borderRadius = "50%";
+  wrapper.style.background = "white";
+  wrapper.style.border = "3px solid #2563EB";
+  wrapper.style.boxShadow = "0 7px 18px rgba(15,23,42,0.3)";
+  wrapper.style.display = "flex";
+  wrapper.style.alignItems = "center";
+  wrapper.style.justifyContent = "center";
+  wrapper.style.boxSizing = "border-box";
+  wrapper.style.pointerEvents = "none";
+  wrapper.style.fontSize = "27px";
+  wrapper.innerText = "📍";
+
+  const overlay = new kakao.maps.CustomOverlay({
+    map,
+    position: new kakao.maps.LatLng(lat, lng),
+    content: wrapper,
+    xAnchor: 0.5,
+    yAnchor: 1,
+    zIndex: 20,
+  });
+
+  officialTempOverlayRef.current = overlay;
+};
 const clearKakaoRoute = () => {
   if (polylineRef.current) {
     polylineRef.current.setMap(null);
@@ -795,6 +841,12 @@ useEffect(() => {
   const latLng = mouseEvent.latLng;
 
   setSelectedMarker(null);
+  setEditingOfficialMarkerId(null);
+
+  setNewMarkerType("step");
+  setNewMarkerDesc("");
+  setNewMarkerImage("");
+  setWheelLevel(1);
 
   setTempMarker({
     lat: latLng.getLat(),
@@ -836,6 +888,7 @@ useEffect(() => {
   return () => {
   isMounted = false;
   clearKakaoOverlays();
+  clearOfficialTempOverlay();
   clearKakaoRoute();
   clearWheelRouteAnimation();
 };
@@ -868,6 +921,22 @@ useEffect(() => {
     clearTimeout(timer3);
   };
 }, [isKakaoMapReady, bfMarkers]);
+useEffect(() => {
+  if (
+    !isKakaoMapReady ||
+    !window.kakao ||
+    !window.kakao.maps ||
+    !kakaoMapRef.current
+  ) {
+    return;
+  }
+
+  drawOfficialTempMarker(window.kakao, kakaoMapRef.current);
+
+  return () => {
+    clearOfficialTempOverlay();
+  };
+}, [isKakaoMapReady, tempMarker]);
 useEffect(() => {
   if (
     !isKakaoMapReady ||
@@ -1038,35 +1107,77 @@ useEffect(() => {
   </div>
 )}
 {isAdminLoggedIn && selectedMarker.id && (
-  <button
-    onClick={async () => {
-      const ok = window.confirm("이 공식 아이콘을 삭제할까요?");
-      if (!ok) return;
-
-      try {
-        await remove(ref(db, `bfMarkers/${selectedMarker.id}`));
-        await remove(ref(db, `bfMarkerImages/${selectedMarker.id}`));
-
-        setSelectedMarker(null);
-        alert("아이콘이 삭제되었습니다.");
-      } catch (error) {
-        alert("아이콘 삭제 중 오류가 발생했습니다.");
-      }
-    }}
+  <div
     style={{
-      width: "100%",
+      display: "flex",
+      gap: "8px",
       marginTop: "12px",
-      border: "none",
-      borderRadius: "12px",
-      padding: "10px",
-      background: "#FEE2E2",
-      color: "#B91C1C",
-      fontWeight: "900",
-      cursor: "pointer",
     }}
   >
-    관리자 삭제
-  </button>
+    <button
+      type="button"
+      onClick={async () => {
+        const loadedImage = await loadMarkerImageSafely(selectedMarker);
+
+        setEditingOfficialMarkerId(selectedMarker.id);
+
+        setTempMarker({
+          lat: Number(selectedMarker.lat),
+          lng: Number(selectedMarker.lng),
+        });
+
+        setNewMarkerType(selectedMarker.type || "step");
+        setNewMarkerDesc(selectedMarker.desc || "");
+        setNewMarkerImage(loadedImage || "");
+        setWheelLevel(Number(selectedMarker.wheelLevel || 1));
+
+        setSelectedMarker(null);
+      }}
+      style={{
+        flex: 1,
+        border: "none",
+        borderRadius: "12px",
+        padding: "10px",
+        background: "#DBEAFE",
+        color: "#1D4ED8",
+        fontWeight: "900",
+        cursor: "pointer",
+      }}
+    >
+      수정
+    </button>
+
+    <button
+      type="button"
+      onClick={async () => {
+        const ok = window.confirm("이 공식 아이콘을 삭제할까요?");
+        if (!ok) return;
+
+        try {
+          await remove(ref(db, `bfMarkers/${selectedMarker.id}`));
+          await remove(ref(db, `bfMarkerImages/${selectedMarker.id}`));
+
+          setSelectedMarker(null);
+          alert("아이콘이 삭제되었습니다.");
+        } catch (error) {
+          console.error("공식 아이콘 삭제 실패:", error);
+          alert("아이콘 삭제 중 오류가 발생했습니다.");
+        }
+      }}
+      style={{
+        flex: 1,
+        border: "none",
+        borderRadius: "12px",
+        padding: "10px",
+        background: "#FEE2E2",
+        color: "#B91C1C",
+        fontWeight: "900",
+        cursor: "pointer",
+      }}
+    >
+      삭제
+    </button>
+  </div>
 )}
   </div>
 )}
@@ -1095,7 +1206,7 @@ useEffect(() => {
         marginBottom: "10px",
       }}
     >
-      공식 요인 등록
+      {editingOfficialMarkerId ? "공식 요인 수정" : "공식 요인 등록"}
     </div>
 
     <select
@@ -1176,10 +1287,13 @@ useEffect(() => {
     <div style={{ display: "flex", gap: "8px" }}>
       <button
         onClick={() => {
-          setTempMarker(null);
-          setNewMarkerDesc("");
-          setNewMarkerImage(null);
-        }}
+  setTempMarker(null);
+  setEditingOfficialMarkerId(null);
+  setNewMarkerType("step");
+  setNewMarkerDesc("");
+  setNewMarkerImage("");
+  setWheelLevel(1);
+}}
         style={{
           flex: 1,
           border: "none",
@@ -1196,35 +1310,64 @@ useEffect(() => {
 
       <button
         onClick={async () => {
-          try {
-            const newMarkerRef = await push(ref(db, "bfMarkers"), {
-  lat: Number(tempMarker.lat),
-  lng: Number(tempMarker.lng),
-  type: newMarkerType,
-  desc: newMarkerDesc,
-  hasImage: !!newMarkerImage,
-  date: new Date().toLocaleDateString(),
-  createdAt: Date.now(),
-  status: "approved",
-  isOfficial: true,
-  wheelLevel: Number(wheelLevel),
-});
+  try {
+    const markerData = {
+      lat: Number(tempMarker.lat),
+      lng: Number(tempMarker.lng),
+      type: newMarkerType,
+      desc: newMarkerDesc,
+      hasImage: !!newMarkerImage,
+      status: "approved",
+      isOfficial: true,
+      wheelLevel: Number(wheelLevel),
+    };
 
-if (newMarkerImage) {
-  await saveMarkerImageIfNeeded(newMarkerRef.key, newMarkerImage);
-}
+    if (editingOfficialMarkerId) {
+      await update(
+        ref(db, `bfMarkers/${editingOfficialMarkerId}`),
+        {
+          ...markerData,
+          updatedAt: Date.now(),
+        }
+      );
 
-            alert("공식 요인이 등록되었습니다.");
+      await saveMarkerImageIfNeeded(
+        editingOfficialMarkerId,
+        newMarkerImage
+      );
 
-            setTempMarker(null);
-            setNewMarkerDesc("");
-            setNewMarkerImage(null);
-            setNewMarkerType("step");
-            setWheelLevel(1);
-          } catch (error) {
-            alert("공식 요인 저장 중 오류가 발생했습니다.");
-          }
-        }}
+      alert("공식 요인이 수정되었습니다.");
+    } else {
+      const newMarkerRef = await push(ref(db, "bfMarkers"), {
+        ...markerData,
+        date: new Date().toLocaleDateString(),
+        createdAt: Date.now(),
+      });
+
+      await saveMarkerImageIfNeeded(
+        newMarkerRef.key,
+        newMarkerImage
+      );
+
+      alert("공식 요인이 등록되었습니다.");
+    }
+
+    setTempMarker(null);
+    setEditingOfficialMarkerId(null);
+    setNewMarkerType("step");
+    setNewMarkerDesc("");
+    setNewMarkerImage("");
+    setWheelLevel(1);
+  } catch (error) {
+    console.error("공식 요인 저장 실패:", error);
+
+    alert(
+      editingOfficialMarkerId
+        ? "공식 요인 수정 중 오류가 발생했습니다."
+        : "공식 요인 등록 중 오류가 발생했습니다."
+    );
+  }
+}}
         style={{
           flex: 1,
           border: "none",
@@ -1236,7 +1379,7 @@ if (newMarkerImage) {
           cursor: "pointer",
         }}
       >
-        등록
+        {editingOfficialMarkerId ? "수정 저장" : "등록"}
       </button>
     </div>
   </div>
