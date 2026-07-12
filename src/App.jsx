@@ -4158,6 +4158,7 @@ const startLiveLocationTracking = async ({
   route = [],
   destination = null,
   centerMap = true,
+  followMap = false,
   onFirstLocation = null,
 } = {}) => {
   await startCompassTracking();
@@ -4170,6 +4171,7 @@ const startLiveLocationTracking = async ({
   stopLiveLocationTracking();
 
   let hasFirstLocation = false;
+  let hasCenteredMapOnce = false;
 
   if (navigationMode) {
     setIsNavigationActive(true);
@@ -4207,17 +4209,45 @@ const startLiveLocationTracking = async ({
     }
 
     setUserLocation([displayLocation.lat, displayLocation.lng]);
-    setIsFollowingUser(true);
 
-    if (centerMap && mapRef.current) {
-      const nextCenter = [displayLocation.lat, displayLocation.lng];
+// 안내 중이면서 followMap이 켜진 경우에만
+// 지도 화면이 계속 사용자를 따라가게 함
+setIsFollowingUser(navigationMode && followMap);
 
-      if (typeof mapRef.current.setView === "function") {
-        mapRef.current.setView(nextCenter, 17);
-      } else if (typeof mapRef.current.flyTo === "function") {
-        mapRef.current.flyTo(nextCenter, 17);
-      }
-    }
+const shouldMoveMap =
+  centerMap && (followMap || !hasCenteredMapOnce);
+
+if (shouldMoveMap && mapRef.current) {
+  const nextCenter = [displayLocation.lat, displayLocation.lng];
+
+  if (typeof mapRef.current.setView === "function") {
+    mapRef.current.setView(nextCenter, 17);
+  } else if (typeof mapRef.current.flyTo === "function") {
+    mapRef.current.flyTo(nextCenter, 17);
+  } else if (
+    typeof mapRef.current.panTo === "function" &&
+    window.kakao?.maps
+  ) {
+    mapRef.current.panTo(
+      new window.kakao.maps.LatLng(
+        displayLocation.lat,
+        displayLocation.lng
+      )
+    );
+  } else if (
+    typeof mapRef.current.setCenter === "function" &&
+    window.kakao?.maps
+  ) {
+    mapRef.current.setCenter(
+      new window.kakao.maps.LatLng(
+        displayLocation.lat,
+        displayLocation.lng
+      )
+    );
+  }
+
+  hasCenteredMapOnce = true;
+}
 
     if (navigationMode && destination) {
       const distance = getDistanceMeters(rawLocation, destination);
@@ -4260,9 +4290,10 @@ const startLiveLocationTracking = async ({
 // setPoint 파라미터를 추가합니다. (예: setStartPoint 또는 setEndPoint)
 const moveToMyLocation = async (setPoint, setCoords) => {
   await startLiveLocationTracking({
-    navigationMode: false,
-    centerMap: true,
-    onFirstLocation: (rawLocation) => {
+  navigationMode: false,
+  centerMap: true,
+  followMap: false,
+  onFirstLocation: (rawLocation) => {
       const myLocation = [rawLocation.lat, rawLocation.lng];
 
       setUserLocation(myLocation);
@@ -5660,11 +5691,14 @@ return (
       }
 
       startLiveLocationTracking({
-        navigationMode: true,
-        route: routeSteps,
-        destination: endMarkerPos,
-        centerMap: true,
-      });
+  navigationMode: true,
+  route: routeSteps,
+  destination: Array.isArray(endMarkerPos)
+    ? endMarkerPos
+    : [endMarkerPos.lat, endMarkerPos.lng],
+  centerMap: true,
+  followMap: true,
+});
     }}
     style={{
       pointerEvents: "auto",
