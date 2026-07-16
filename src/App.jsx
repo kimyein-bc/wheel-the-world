@@ -359,50 +359,21 @@ const fitKakaoMapBounds = (positions = []) => {
   kakaoMapRef.current.setBounds(bounds);
 };
 
-  const getKakaoMarkerInfo = (type) => {
-    const normalizedType = type === "stairs" ? "step" : type;
+ const getKakaoMarkerInfo = (type) => {
+  const fallbackConfig =
+    bfConfig.step || bfConfig.sidewalk || Object.values(bfConfig)[0];
 
-    const markerInfo = {
-      step: {
-        label: "단차 / 계단",
-        icon: "🪜",
-        color: "#EF4444",
-      },
-      narrow: {
-        label: "좁은 길",
-        icon: "↔️",
-        color: "#F97316",
-      },
-      obstacle: {
-        label: "장애물",
-        icon: "🚧",
-        color: "#F59E0B",
-      },
-      elevator: {
-        label: "엘리베이터",
-        icon: "🛗",
-        color: "#2563EB",
-      },
-      slope: {
-        label: "경사",
-        icon: "⛰️",
-        color: "#8B5CF6",
-      },
-      sidewalk: {
-        label: "보도 상태",
-        icon: "🛣️",
-        color: "#10B981",
-      },
-    };
+  const config = bfConfig[type] || fallbackConfig;
 
-    return (
-      markerInfo[normalizedType] || {
-        label: "기타",
-        icon: "📍",
-        color: "#64748B",
-      }
-    );
+  const icon = config.icon || "📍";
+  const rawLabel = config.label || "기타";
+
+  return {
+    label: rawLabel.replace(icon, "").trim(),
+    icon,
+    color: config.color || "#64748B",
   };
+};
 
   const clearKakaoOverlays = () => {
     overlayRefs.current.forEach((overlay) => {
@@ -765,46 +736,63 @@ const validMarkers = markerSource
     lat: Number(m.lat),
     lng: Number(m.lng),
   }))
-  .filter(
+    .filter(
     (m) =>
       !Number.isNaN(m.lat) &&
-      !Number.isNaN(m.lng)
+      !Number.isNaN(m.lng) &&
+      (m.type !== "puddle" || IS_RAINY_MODE)
   );
   validMarkers.forEach((m) => {
-    const info = getKakaoMarkerInfo(m.type);
+  const info = getKakaoMarkerInfo(m.type);
+  const isPuddleMarker = m.type === "puddle";
 
-    const markerEl = document.createElement("div");
-    markerEl.style.position = "relative";
-    markerEl.style.display = "flex";
-    markerEl.style.alignItems = "center";
-    markerEl.style.justifyContent = "center";
-    markerEl.style.width = "38px";
-    markerEl.style.height = "38px";
-    markerEl.style.borderRadius = "50%";
-    markerEl.style.background = info.color;
-    markerEl.style.color = "white";
-    markerEl.style.fontSize = "20px";
-    markerEl.style.fontWeight = "900";
-    markerEl.style.border = "3px solid white";
-    markerEl.style.boxShadow = "0 4px 12px rgba(0,0,0,0.25)";
-    markerEl.style.cursor = "pointer";
-    markerEl.style.opacity =
-      m.status === "approved" || m.isOfficial === true ? "1" : "0.55";
-    markerEl.innerText = info.icon;
+  const markerBgColor = isPuddleMarker ? "#0EA5E9" : "#FFFFFF";
+  const markerBorderColor = isPuddleMarker ? "#0284C7" : info.color;
+  const markerShadow = isPuddleMarker
+    ? "0 6px 16px rgba(14, 165, 233, 0.45)"
+    : "0 4px 12px rgba(15, 23, 42, 0.18)";
 
-    markerEl.onclick = async () => {
-  const markerApproved = m.status === "approved" || m.isOfficial === true;
-  const loadedImage = await loadMarkerImageSafely(m);
+  const markerEl = document.createElement("div");
 
-  setSelectedMarker({
-    ...m,
-    image: loadedImage,
-    displayLabel: info.label,
-    displayIcon: info.icon,
-    displayColor: info.color,
-    isApproved: markerApproved,
+  Object.assign(markerEl.style, {
+    position: "relative",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+
+    width: isPuddleMarker ? "40px" : "36px",
+    height: isPuddleMarker ? "40px" : "36px",
+    borderRadius: "50%",
+
+    background: markerBgColor,
+    color: isPuddleMarker ? "#FFFFFF" : markerBorderColor,
+    fontSize: isPuddleMarker ? "22px" : "18px",
+    fontWeight: "900",
+
+    border: `2.5px solid ${markerBorderColor}`,
+    boxShadow: markerShadow,
+    cursor: "pointer",
+    userSelect: "none",
+
+    opacity:
+      m.status === "approved" || m.isOfficial === true ? "1" : "0.55",
   });
-};
+
+  markerEl.innerText = isPuddleMarker ? "💧" : info.icon;
+
+  markerEl.onclick = async () => {
+    const markerApproved = m.status === "approved" || m.isOfficial === true;
+    const loadedImage = await loadMarkerImageSafely(m);
+
+    setSelectedMarker({
+      ...m,
+      image: loadedImage,
+      displayLabel: info.label,
+      displayIcon: info.icon,
+      displayColor: info.color,
+      isApproved: markerApproved,
+    });
+  };
 
     const overlay = new kakao.maps.CustomOverlay({
       map,
@@ -1424,49 +1412,20 @@ isAdminLoggedInRef.current = isAdminLoggedIn;
 latestCreateBfMarkersRef.current = bfMarkers;
 
   const getKakaoMarkerInfo = (type) => {
-    const normalizedType = type === "stairs" ? "step" : type;
+  const fallbackConfig =
+    bfConfig.step || bfConfig.sidewalk || Object.values(bfConfig)[0];
 
-    const markerInfo = {
-      step: {
-        label: "단차 / 계단",
-        icon: "🪜",
-        color: "#EF4444",
-      },
-      narrow: {
-        label: "좁은 길",
-        icon: "↔️",
-        color: "#F97316",
-      },
-      obstacle: {
-        label: "장애물",
-        icon: "🚧",
-        color: "#F59E0B",
-      },
-      elevator: {
-        label: "엘리베이터",
-        icon: "🛗",
-        color: "#2563EB",
-      },
-      slope: {
-        label: "경사",
-        icon: "⛰️",
-        color: "#8B5CF6",
-      },
-      sidewalk: {
-        label: "보도 상태",
-        icon: "🛣️",
-        color: "#10B981",
-      },
-    };
+  const config = bfConfig[type] || fallbackConfig;
 
-    return (
-      markerInfo[normalizedType] || {
-        label: "기타",
-        icon: "📍",
-        color: "#64748B",
-      }
-    );
+  const icon = config.icon || "📍";
+  const rawLabel = config.label || "기타";
+
+  return {
+    label: rawLabel.replace(icon, "").trim(),
+    icon,
+    color: config.color || "#64748B",
   };
+};
 
   const clearKakaoCreateOverlays = () => {
     overlayRefs.current.forEach((overlay) => overlay.setMap(null));
@@ -1528,60 +1487,81 @@ const validMarkers = markerSource
     lat: Number(m.lat),
     lng: Number(m.lng),
   }))
-  .filter(
+    .filter(
     (m) =>
       !Number.isNaN(m.lat) &&
-      !Number.isNaN(m.lng)
+      !Number.isNaN(m.lng) &&
+      (m.type !== "puddle" || IS_RAINY_MODE)
   );
 
     validMarkers.forEach((m) => {
-      const info = getKakaoMarkerInfo(m.type);
-      const isApproved = m.status === "approved" || m.isOfficial === true;
+  const info = getKakaoMarkerInfo(m.type);
+  const isApproved = m.status === "approved" || m.isOfficial === true;
 
-      const markerEl = document.createElement("div");
-      markerEl.style.position = "relative";
-      markerEl.style.display = "flex";
-      markerEl.style.alignItems = "center";
-      markerEl.style.justifyContent = "center";
-      markerEl.style.width = "38px";
-      markerEl.style.height = "38px";
-      markerEl.style.borderRadius = "50%";
-      markerEl.style.background = "white";
-      markerEl.style.color = "#111827";
-      markerEl.style.fontSize = "20px";
-      markerEl.style.fontWeight = "900";
-      markerEl.style.border = isApproved
-        ? `3px solid ${info.color}`
-        : "3px dashed #999";
-      markerEl.style.boxShadow = "0 4px 12px rgba(0,0,0,0.25)";
-      markerEl.style.cursor = "pointer";
-      markerEl.style.opacity = isApproved ? "1" : "0.65";
-      markerEl.innerText = info.icon;
+  const isPuddleMarker = m.type === "puddle";
 
-      markerEl.onclick = async () => {
-  setTempMarker(null);
+  const markerBgColor = isPuddleMarker ? "#0EA5E9" : "#FFFFFF";
+  const markerTextColor = isPuddleMarker ? "#FFFFFF" : "#111827";
+  const markerBorderColor = isPuddleMarker
+    ? "#0284C7"
+    : isApproved
+    ? info.color
+    : "#999";
+  const markerBorderStyle = isApproved ? "solid" : "dashed";
+  const markerShadow = isPuddleMarker
+    ? "0 6px 16px rgba(14, 165, 233, 0.45)"
+    : "0 4px 12px rgba(0,0,0,0.25)";
 
-  const loadedImage = await loadMarkerImageSafely(m);
+  const markerEl = document.createElement("div");
 
-  setSelectedCreateMarker({
-    ...m,
-    image: loadedImage,
-    displayLabel: info.label,
-    displayIcon: info.icon,
-    displayColor: info.color,
-    isApproved,
+  Object.assign(markerEl.style, {
+    position: "relative",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+
+    width: isPuddleMarker ? "40px" : "38px",
+    height: isPuddleMarker ? "40px" : "38px",
+    borderRadius: "50%",
+
+    background: markerBgColor,
+    color: markerTextColor,
+    fontSize: isPuddleMarker ? "22px" : "20px",
+    fontWeight: "900",
+
+    border: `3px ${markerBorderStyle} ${markerBorderColor}`,
+    boxShadow: markerShadow,
+    cursor: "pointer",
+    userSelect: "none",
+    opacity: isApproved ? "1" : "0.65",
   });
-};
 
-      const overlay = new kakao.maps.CustomOverlay({
-        map,
-        position: new kakao.maps.LatLng(m.lat, m.lng),
-        content: markerEl,
-        yAnchor: 1,
-      });
+  markerEl.innerText = isPuddleMarker ? "💧" : info.icon;
 
-      overlayRefs.current.push(overlay);
+  markerEl.onclick = async () => {
+    setTempMarker(null);
+
+    const loadedImage = await loadMarkerImageSafely(m);
+
+    setSelectedCreateMarker({
+      ...m,
+      image: loadedImage,
+      displayLabel: info.label,
+      displayIcon: info.icon,
+      displayColor: info.color,
+      isApproved,
     });
+  };
+
+  const overlay = new kakao.maps.CustomOverlay({
+    map,
+    position: new kakao.maps.LatLng(m.lat, m.lng),
+    content: markerEl,
+    yAnchor: 1,
+  });
+
+  overlayRefs.current.push(overlay);
+});
 
     drawTempMarker(kakao, map);
   };
@@ -3171,6 +3151,14 @@ const SurveyInviteCard = ({ compact = false }) => {
     </div>
   );
 };
+
+// ================================
+// 비 오는 날 모드
+// true  = 물고임 아이콘 표시
+// false = 물고임 아이콘 숨김
+// ================================
+const IS_RAINY_MODE = true;
+
 function App() {
   const KAKAO_REST_API_KEY = "1425cc58ea2a07e5aea6e01a9b0dac74";
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -3477,6 +3465,30 @@ const bfConfig = {
     color: "#8B5CF6",
     icon: "🧱",
   },
+  puddle: {
+  label: "💧 웅덩이",
+  color: "#0EA5E9",
+  icon: "💧",
+},
+};
+// ================================
+// 마커 아이콘/색상/이름 통일 기준
+// bfConfig를 기준으로 지도 표시, 설명창, 제보 선택 아이콘을 모두 통일
+// ================================
+const getUnifiedMarkerInfo = (type) => {
+  const fallbackConfig =
+    bfConfig.step || bfConfig.sidewalk || Object.values(bfConfig)[0];
+
+  const config = bfConfig[type] || fallbackConfig;
+
+  const icon = config.icon || "📍";
+  const rawLabel = config.label || "기타";
+
+  return {
+    label: rawLabel.replace(icon, "").trim(),
+    icon,
+    color: config.color || "#64748B",
+  };
 };
 const getBfConfig = (type) => {
   const normalizedType = type === "stairs" ? "step" : type;
@@ -3943,8 +3955,10 @@ const getObstacles = (mode, bfMarkers) => {
 
   // ✅ 승인된 마커만 경로 회피에 사용
   const approvedMarkers = bfMarkers.filter(
-    (m) => m.status === "approved" || m.isOfficial === true
-  );
+  (m) =>
+    (m.status === "approved" || m.isOfficial === true) &&
+    m.type !== "puddle"
+);
 
   let targetMarkers = [];
 
@@ -4967,7 +4981,7 @@ const renderMarkerTypeFilter = () => {
         style={{
   position: "absolute",
   left: "8px",
-  zIndex: 40,
+  zIndex: 10,
 
   height: "34px",
   padding: "0 11px",
@@ -5313,7 +5327,7 @@ return (
       flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
-      padding: isMobile ? "18px 18px 34px" : "40px 20px",
+      padding: isMobile ? "10px 14px 14px" : "22px 20px",
       position: "relative",
       boxSizing: "border-box",
       width: "100%",
@@ -5321,7 +5335,21 @@ return (
       overflow: "hidden",
     }}
   >
+    {isMobile ? (
+  <CuteCartoonBackground />
+) : (
+  <div
+    style={{
+      position: "fixed",
+      inset: 0,
+      zIndex: 0,
+      overflow: "hidden",
+      pointerEvents: "none",
+    }}
+  >
     <CuteCartoonBackground />
+  </div>
+)}
 
     <div
       style={{
@@ -5333,14 +5361,14 @@ return (
         flexDirection: "column",
         alignItems: "center",
         textAlign: "center",
-        transform: isMobile ? "translateY(-34px)" : "translateY(-18px)",
+        transform: isMobile ? "translateY(-42px)" : "translateY(-26px)",
       }}
     >
       <div
         style={{
-          transform: isMobile ? "scale(0.72)" : "scale(0.92)",
-          marginTop: isMobile ? "-88px" : "-48px",
-          marginBottom: isMobile ? "-166px" : "-70px",
+          transform: isMobile ? "scale(0.64)" : "scale(0.78)",
+marginTop: isMobile ? "-96px" : "-58px",
+marginBottom: isMobile ? "-178px" : "-96px",
           filter: "drop-shadow(0 8px 14px rgba(30, 80, 120, 0.12))",
         }}
       >
@@ -5354,13 +5382,13 @@ return (
           boxShadow: "0 12px 28px rgba(72, 117, 92, 0.12)",
           backdropFilter: "blur(10px)",
           borderRadius: "999px",
-          padding: isMobile ? "10px 18px" : "12px 24px",
-          marginBottom: isMobile ? "18px" : "22px",
+          padding: isMobile ? "8px 16px" : "10px 22px",
+marginBottom: isMobile ? "10px" : "14px",
         }}
       >
         <div
           style={{
-            fontSize: isMobile ? "14px" : "16px",
+            fontSize: isMobile ? "13px" : "15px",
             color: "#1976D2",
             fontWeight: "900",
             letterSpacing: "0.2px",
@@ -5372,7 +5400,7 @@ return (
 
         <div
           style={{
-            fontSize: isMobile ? "15px" : "18px",
+            fontSize: isMobile ? "14px" : "16px",
             color: "#1F2937",
             fontWeight: "800",
             lineHeight: "1.35",
@@ -5387,7 +5415,7 @@ return (
   style={{
     display: "flex",
     flexDirection: "column",
-    gap: isMobile ? "15px" : "18px",
+    gap: isMobile ? "9px" : "12px",
     width: "100%",
   }}
 >
@@ -5396,11 +5424,11 @@ return (
   onClick={openOpinionSurvey}
   style={{
     width: "100%",
-    marginBottom: "14px",
-    padding: "11px 13px",
+    marginBottom: "2px",
+padding: "8px 11px",
+borderRadius: "14px",
     boxSizing: "border-box",
     border: "1px solid #FED7AA",
-    borderRadius: "16px",
     background: "rgba(255, 247, 237, 0.96)",
     boxShadow: "0 6px 15px rgba(154, 52, 18, 0.08)",
     display: "flex",
@@ -5422,7 +5450,7 @@ return (
     <span
       style={{
         flexShrink: 0,
-        fontSize: "23px",
+        fontSize: "19px",
       }}
     >
       {SURVEY_COUNT < SURVEY_LIMIT ? "☕" : "💬"}
@@ -5432,7 +5460,7 @@ return (
       <div
         style={{
           color: "#9A3412",
-          fontSize: "13.5px",
+          fontSize: "12.5px",
           fontWeight: "900",
           lineHeight: 1.3,
           whiteSpace: "nowrap",
@@ -5447,7 +5475,7 @@ return (
         style={{
           marginTop: "2px",
           color: "#78716C",
-          fontSize: "10.5px",
+          fontSize: "10px",
           fontWeight: "700",
           lineHeight: 1.3,
         }}
@@ -5497,8 +5525,9 @@ return (
     style={{
       width: "100%",
       border: "none",
-      borderRadius: "30px",
-      padding: isMobile ? "18px 18px" : "22px 22px",
+      borderRadius: "24px",
+padding: isMobile ? "12px 14px" : "16px 18px",
+gap: "12px",
       background:
         "linear-gradient(145deg, rgba(255,255,255,0.96), rgba(219,234,254,0.96))",
       boxShadow:
@@ -5508,7 +5537,6 @@ return (
       textAlign: "left",
       display: "flex",
       alignItems: "center",
-      gap: "16px",
       position: "relative",
       overflow: "hidden",
     }}
@@ -5549,14 +5577,15 @@ return (
 
     <div
       style={{
-        width: isMobile ? "58px" : "64px",
-        height: isMobile ? "58px" : "64px",
-        borderRadius: "24px",
+        width: isMobile ? "46px" : "54px",
+height: isMobile ? "46px" : "54px",
+borderRadius: "18px",
+fontSize: isMobile ? "23px" : "27px",
         background: "linear-gradient(135deg, #60A5FA, #2563EB)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontSize: isMobile ? "29px" : "32px",
+        
         flexShrink: 0,
         boxShadow:
           "inset 0 0 0 2px rgba(255,255,255,0.45), 0 8px 16px rgba(37,99,235,0.25)",
@@ -5598,7 +5627,7 @@ return (
 
       <div
         style={{
-          fontSize: isMobile ? "12.5px" : "13.5px",
+          fontSize: isMobile ? "11.5px" : "12.5px",
           color: "#475569",
           lineHeight: "1.45",
           fontWeight: "650",
@@ -5615,15 +5644,16 @@ return (
       style={{
         position: "relative",
         zIndex: 1,
-        width: "32px",
-        height: "32px",
+        width: "28px",
+height: "28px",
+fontSize: "18px",
         borderRadius: "50%",
         background: "rgba(255,255,255,0.95)",
         color: "#2563EB",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontSize: "20px",
+       
         fontWeight: "900",
         boxShadow: "0 4px 10px rgba(37,99,235,0.18)",
         flexShrink: 0,
@@ -5638,8 +5668,9 @@ return (
     style={{
       width: "100%",
       border: "none",
-      borderRadius: "30px",
-      padding: isMobile ? "18px 18px" : "22px 22px",
+      borderRadius: "24px",
+padding: isMobile ? "12px 14px" : "16px 18px",
+gap: "12px",
       background:
         "linear-gradient(145deg, rgba(255,255,255,0.96), rgba(209,250,229,0.96))",
       boxShadow:
@@ -5649,7 +5680,7 @@ return (
       textAlign: "left",
       display: "flex",
       alignItems: "center",
-      gap: "16px",
+     
       position: "relative",
       overflow: "hidden",
     }}
@@ -5690,14 +5721,15 @@ return (
 
     <div
       style={{
-        width: isMobile ? "58px" : "64px",
-        height: isMobile ? "58px" : "64px",
-        borderRadius: "24px",
+        width: isMobile ? "46px" : "54px",
+height: isMobile ? "46px" : "54px",
+borderRadius: "18px",
+fontSize: isMobile ? "23px" : "27px",
         background: "linear-gradient(135deg, #34D399, #059669)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontSize: isMobile ? "29px" : "32px",
+       
         flexShrink: 0,
         boxShadow:
           "inset 0 0 0 2px rgba(255,255,255,0.45), 0 8px 16px rgba(5,150,105,0.22)",
@@ -5727,7 +5759,7 @@ return (
 
       <div
         style={{
-          fontSize: isMobile ? "19px" : "21px",
+          fontSize: isMobile ? "17px" : "19px",
           fontWeight: "950",
           color: "#065F46",
           marginBottom: "5px",
@@ -5739,7 +5771,7 @@ return (
 
       <div
         style={{
-          fontSize: isMobile ? "12.5px" : "13.5px",
+          fontSize: isMobile ? "11.5px" : "12.5px",
           color: "#475569",
           lineHeight: "1.45",
           fontWeight: "650",
@@ -5756,15 +5788,16 @@ return (
       style={{
         position: "relative",
         zIndex: 1,
-        width: "32px",
-        height: "32px",
+       width: "28px",
+height: "28px",
+fontSize: "18px",
         borderRadius: "50%",
         background: "rgba(255,255,255,0.95)",
         color: "#059669",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontSize: "20px",
+        
         fontWeight: "900",
         boxShadow: "0 4px 10px rgba(5,150,105,0.16)",
         flexShrink: 0,
@@ -5778,7 +5811,7 @@ return (
       <footer
         onClick={handleSecretDoorClick}
         style={{
-          marginTop: isMobile ? "28px" : "34px",
+          marginTop: isMobile ? "12px" : "18px",
           fontSize: "11px",
           color: "rgba(31,41,55,0.42)",
           cursor: "pointer",
@@ -5827,6 +5860,21 @@ return (
               flexDirection: "column", 
               gap: "8px" 
             }}>
+              {!isMobile && (
+                <h3
+                  style={{
+                    margin: "0 0 10px",
+                    color: "#5B5570",
+                    fontSize: "24px",
+                    fontWeight: "900",
+                    letterSpacing: "-0.6px",
+                    textAlign: "center",
+                  }}
+                >
+                  🗺️ 안전 길찾기
+                </h3>
+              )}
+              
               
               {isRouteSearched && routeInfo ? (
   <div
@@ -6339,17 +6387,23 @@ background: isSelected ? "#2563EB" : "transparent",
         type="button"
         onClick={finishNavigationAndOpenFeedback}
         style={{
-          pointerEvents: "auto",
-          border: "none",
-          borderRadius: "999px",
-          padding: "8px 16px",
-          background: isNavigationFinished ? "#16A34A" : "#EF4444",
-          color: "white",
-          fontSize: "13px",
-          fontWeight: "900",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.18)",
-          cursor: "pointer",
-        }}
+  height: "34px",
+  padding: "0 14px",
+
+  border: "1px solid #DC2626",
+  borderRadius: "3px",
+  background: "#EF4444",
+  color: "#FFFFFF",
+
+  fontSize: "11.5px",
+  fontWeight: "900",
+  fontFamily: "inherit",
+  whiteSpace: "nowrap",
+
+  boxShadow: "0 1px 2px rgba(0,0,0,0.18)",
+  cursor: "pointer",
+  pointerEvents: "auto",
+}}
       >
         안내 종료
       </button>
@@ -6746,17 +6800,51 @@ background: isSelected ? "#2563EB" : "transparent",
       boxSizing: "border-box",
     }}
   >
-    {renderHeader()}
+    <div
+  style={{
+    position: "relative",
+    zIndex: 10000,
+  }}
+>
+  {renderHeader()}
+</div>
 
-    <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row" }}>
+    <div
+  style={{
+    flex: 1,
+    display: "flex",
+    flexDirection: isMobile ? "column" : "row",
+    marginTop: "60px",
+    minHeight: 0,
+  }}
+>
       {/* 제보 패널 */}
-      <div style={{ width: isMobile ? "100%" : "320px", padding: "20px", background: "#f9f9f9", overflowY: "auto" }}>
+      <div
+  style={{
+    width: isMobile ? "100%" : "320px",
+    padding: isMobile ? "10px 16px 12px" : "20px",
+    background: "#f9f9f9",
+    overflowY: isMobile ? "visible" : "auto",
+    position: "relative",
+    zIndex: 3000,
+  }}
+>
         
-<h3>✍️ 새로운 안전 요인 제보</h3>
+{!isMobile && (
+  <h3>✍️ 주민 제보</h3>
+)}
 
 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
 
-  <div style={{ display: "flex", gap: "8px" }}>
+ <div
+  style={{
+    display: "flex",
+    gap: "8px",
+    position: "relative",
+    zIndex: 9999,
+    overflow: "visible",
+  }}
+>
 
   <div style={{ flex: 1, position: "relative" }}>
 
@@ -6766,66 +6854,44 @@ background: isSelected ? "#2563EB" : "transparent",
       value={searchKeyword}
       onChange={(e) => handleSearchKeywordChange(e.target.value)}
       style={{
-        width: "100%",
-        padding: "10px",
-        border: "1px solid #ddd",
-        borderRadius: "8px"
-      }}
+  width: "100%",
+  height: "38px",
+  padding: "0 11px",
+  boxSizing: "border-box",
+  border: "1px solid #DCE3EC",
+  borderRadius: "10px",
+  background: "#FFFFFF",
+  color: "#1E293B",
+  fontSize: "12.5px",
+  fontFamily: "inherit",
+  outline: "none",
+}}
     />
 
-    {searchSuggestions.length > 0 && (
-      <div
-        style={{
-          position: "absolute",
-          top: "100%",
-          left: 0,
-          right: 0,
-          background: "white",
-          border: "1px solid #ddd",
-          borderRadius: "8px",
-          zIndex: 2000,
-          maxHeight: "200px",
-          overflowY: "auto"
-        }}
-      >
-        {searchSuggestions.map((item, idx) => (
-          <div
-            key={idx}
-            onClick={() => {
-              setSearchKeyword(item.name);
-
-              mapRef.current.flyTo(
-                [item.lat, item.lng],
-                18,
-                { duration: 1.5 }
-              );
-
-              setSearchSuggestions([]);
-            }}
-            style={{
-              padding: "10px",
-              cursor: "pointer",
-              borderBottom: "1px solid #eee"
-            }}
-          >
-            {item.name}
-          </div>
-        ))}
-      </div>
-    )}
+   
 
   </div>
 
   <button
     onClick={handleSearchPlace}
     style={{
-      padding: "10px 14px",
-      border: "none",
-      borderRadius: "8px",
-      background: "#10B981",
-      color: "white",
-      cursor: "pointer"
-    }}
+  flexShrink: 0,
+  width: "40px",
+  height: "38px",
+  padding: 0,
+  border: "none",
+  borderRadius: "10px",
+  background: "#2563EB",
+  color: "#FFFFFF",
+  fontSize: "15px",
+  fontWeight: "900",
+  fontFamily: "inherit",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  boxShadow: "0 4px 10px rgba(37,99,235,0.18)",
+}}
   >
     🔍
   </button>
@@ -6833,27 +6899,85 @@ background: isSelected ? "#2563EB" : "transparent",
   <button
   onClick={() => moveToMyLocation()}
   style={{
-    width: "58px",
-    minWidth: "58px",
-    padding: "0 8px",
-    border: "none",
-    borderRadius: "8px",
-    background: "#2563EB",
-    color: "white",
-    cursor: "pointer",
-    fontWeight: "900",
-    fontSize: "12px",
-    whiteSpace: "nowrap",
-  }}
+  flexShrink: 0,
+  height: "38px",
+  padding: "0 11px",
+  borderRadius: "10px",
+  border: "1px solid #BFDBFE",
+  background: "#EFF6FF",
+  color: "#2563EB",
+  fontSize: "11.5px",
+  fontWeight: "850",
+  fontFamily: "inherit",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+  boxShadow: "0 2px 6px rgba(37,99,235,0.08)",
+}}
 >
   내 위치
 </button>
+{searchSuggestions.length > 0 && (
+  <ul
+    style={{
+      position: "absolute",
+      top: "42px",
+      left: 0,
+      right: 0,
+      zIndex: 9999,
+
+      margin: "4px 0 0",
+      padding: "5px 0",
+      listStyle: "none",
+
+      background: "#FFFFFF",
+      border: "1px solid #E2E8F0",
+      borderRadius: "8px",
+      boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
+
+      maxHeight: "none",
+      overflow: "visible",
+    }}
+  >
+    {searchSuggestions.map((item, idx) => {
+      const name =
+        typeof item === "string" ? item : item.name;
+
+      return (
+        <li
+          key={idx}
+          onClick={() => {
+            setSearchKeyword(name);
+            setSearchSuggestions([]);
+          }}
+          style={{
+            padding: "10px 12px",
+            fontSize: "13px",
+            color: "#334155",
+            cursor: "pointer",
+            borderBottom:
+              idx === searchSuggestions.length - 1
+                ? "none"
+                : "1px solid #F1F5F9",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "#F1F5F9";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "transparent";
+          }}
+        >
+          🔍 {name}
+        </li>
+      );
+    })}
+  </ul>
+)}
 </div>
 
 
 
  <p style={{ fontSize: "12px", color: "#666" }}>
-  📍 지도에서 제보할 위치를 더블 클릭하세요.
+  📍 지도에서 제보할 위치를 더블 클릭해 주세요.
 </p>
 
 </div>
