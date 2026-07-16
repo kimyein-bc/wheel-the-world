@@ -2976,7 +2976,201 @@ const buttonStyle = {
   textAlign: "center",
   backdropFilter: "blur(4px)"
 };
+// ================================
+// 1분 의견 설문 설정
+// ================================
+const GOOGLE_FORM_URL =
+  "https://docs.google.com/forms/d/e/1FAIpQLSdsufxeu500lZlAhLGS2gVuL7vWayaIf2cf2YGCLPmLuX52Xg/viewform";
 
+const SURVEY_COUNT = 0; // 현재 확인한 설문 제출 인원
+const SURVEY_LIMIT = 10;
+
+const openOpinionSurvey = () => {
+  if (!GOOGLE_FORM_URL.startsWith("http")) {
+    alert("구글폼 주소가 아직 등록되지 않았습니다.");
+    return;
+  }
+
+  window.open(
+    GOOGLE_FORM_URL,
+    "_blank",
+    "noopener,noreferrer"
+  );
+};
+
+const SurveyInviteCard = ({ compact = false }) => {
+  const rewardAvailable = SURVEY_COUNT < SURVEY_LIMIT;
+
+  const progressPercent = Math.min(
+    100,
+    (SURVEY_COUNT / SURVEY_LIMIT) * 100
+  );
+
+  return (
+    <div
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        padding: compact ? "16px" : "18px",
+        borderRadius: compact ? "18px" : "24px",
+        background:
+          "linear-gradient(145deg, rgba(255,255,255,0.98), rgba(255,247,237,0.98))",
+        border: "1px solid #FED7AA",
+        boxShadow: compact
+          ? "0 8px 22px rgba(154,52,18,0.08)"
+          : "0 12px 28px rgba(154,52,18,0.12)",
+        textAlign: "left",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          marginBottom: "8px",
+        }}
+      >
+        <span style={{ fontSize: "24px" }}>
+          {rewardAvailable ? "☕" : "💬"}
+        </span>
+
+        <div
+          style={{
+            color: "#7C2D12",
+            fontSize: compact ? "17px" : "19px",
+            fontWeight: "950",
+            letterSpacing: "-0.4px",
+          }}
+        >
+          {compact
+            ? "조금 더 들려주세요"
+            : "1분 의견 설문"}
+        </div>
+      </div>
+
+      <div
+        style={{
+          color: "#475569",
+          fontSize: "13px",
+          lineHeight: 1.55,
+          wordBreak: "keep-all",
+        }}
+      >
+        휠더월드를 이용하며 느낀 점과
+        <br />
+        개선되었으면 하는 부분을 들려주세요.
+      </div>
+
+      <div
+        style={{
+          marginTop: "9px",
+          color: "#64748B",
+          fontSize: "12px",
+          fontWeight: "700",
+        }}
+      >
+        ⏱ 약 1분 소요
+      </div>
+
+      {rewardAvailable && (
+        <>
+          <div
+            style={{
+              marginTop: "11px",
+              padding: "10px 11px",
+              borderRadius: "13px",
+              background: "#FFF7ED",
+              color: "#9A3412",
+              fontSize: "12.5px",
+              lineHeight: 1.45,
+              fontWeight: "800",
+              wordBreak: "keep-all",
+            }}
+          >
+            🎁 설문 제출 완료자 선착순 {SURVEY_LIMIT}명에게
+            커피 쿠폰을 드려요.
+          </div>
+
+          <div
+            style={{
+              marginTop: "10px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              color: "#64748B",
+              fontSize: "11.5px",
+              fontWeight: "800",
+            }}
+          >
+            <span>현재 참여</span>
+            <span>
+              {SURVEY_COUNT} / {SURVEY_LIMIT}
+            </span>
+          </div>
+
+          <div
+            style={{
+              width: "100%",
+              height: "7px",
+              marginTop: "6px",
+              borderRadius: "999px",
+              background: "#FFEDD5",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                width: `${progressPercent}%`,
+                height: "100%",
+                borderRadius: "999px",
+                background:
+                  "linear-gradient(90deg, #FB923C, #F97316)",
+                transition: "width 0.3s ease",
+              }}
+            />
+          </div>
+        </>
+      )}
+
+      <button
+        type="button"
+        onClick={openOpinionSurvey}
+        style={{
+          width: "100%",
+          marginTop: "14px",
+          padding: "12px",
+          border: "none",
+          borderRadius: "14px",
+          background:
+            "linear-gradient(135deg, #F97316, #EA580C)",
+          color: "white",
+          fontSize: "14px",
+          fontWeight: "900",
+          cursor: "pointer",
+          boxShadow: "0 7px 14px rgba(234,88,12,0.2)",
+        }}
+      >
+        {rewardAvailable
+          ? "1분 설문 참여하기 〉"
+          : "의견 남기기 〉"}
+      </button>
+
+      {rewardAvailable && (
+        <div
+          style={{
+            marginTop: "7px",
+            color: "#94A3B8",
+            fontSize: "10.5px",
+            lineHeight: 1.4,
+            textAlign: "center",
+          }}
+        >
+          구글폼 응답 제출 순서에 따라 제공됩니다.
+        </div>
+      )}
+    </div>
+  );
+};
 function App() {
   const KAKAO_REST_API_KEY = "1425cc58ea2a07e5aea6e01a9b0dac74";
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -3310,6 +3504,16 @@ const [showNavigationFeedback, setShowNavigationFeedback] = useState(false);
 const [navigationFeedbackRating, setNavigationFeedbackRating] = useState(0);
 const [navigationFeedbackComment, setNavigationFeedbackComment] = useState("");
 const [isSavingNavigationFeedback, setIsSavingNavigationFeedback] = useState(false);
+const [
+  navigationFeedbackSaved,
+  setNavigationFeedbackSaved
+] = useState(false);
+const closeNavigationFeedbackModal = () => {
+  setShowNavigationFeedback(false);
+  setNavigationFeedbackSaved(false);
+  setNavigationFeedbackRating(0);
+  setNavigationFeedbackComment("");
+};
   const [deviceHeading, setDeviceHeading] = useState(null);
   const compassHandlerRef = useRef(null);
   const isCompassTrackingRef = useRef(false);
@@ -4237,6 +4441,7 @@ const finishNavigationAndOpenFeedback = () => {
 
   setNavigationFeedbackRating(0);
   setNavigationFeedbackComment("");
+  setNavigationFeedbackSaved(false);
   setShowNavigationFeedback(true);
 };
 
@@ -4285,8 +4490,8 @@ const saveNavigationFeedback = async () => {
         : null,
     });
 
-    alert("의견이 저장되었습니다. 감사합니다!");
-    setShowNavigationFeedback(false);
+    
+    setNavigationFeedbackSaved(true);
     setNavigationFeedbackRating(0);
     setNavigationFeedbackComment("");
   } catch (error) {
@@ -4760,20 +4965,32 @@ const renderMarkerTypeFilter = () => {
         type="button"
         onClick={() => setIsMarkerFilterOpen((prev) => !prev)}
         style={{
-          border: "none",
-          borderRadius: "999px",
-          padding: "9px 13px",
-          background: "rgba(15,23,42,0.88)",
-          color: "white",
-          fontSize: "12px",
-          fontWeight: "900",
-          boxShadow: "0 6px 18px rgba(15,23,42,0.22)",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          gap: "6px",
-          backdropFilter: "blur(8px)",
-        }}
+  position: "absolute",
+  left: "8px",
+  zIndex: 40,
+
+  height: "34px",
+  padding: "0 11px",
+
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "5px",
+
+  border: "1px solid #9197A3",
+  borderRadius: "3px",
+  background: "#FFFFFF",
+  color: "#222222",
+
+  fontSize: "11px",
+  fontWeight: "800",
+  fontFamily: "inherit",
+  whiteSpace: "nowrap",
+
+  boxShadow: "0 1px 2px rgba(0,0,0,0.18)",
+  cursor: "pointer",
+  transform: "translateY(-8px)",
+}}
       >
         <span>표시</span>
         <span
@@ -5162,7 +5379,7 @@ return (
             wordBreak: "keep-all",
           }}
         >
-          함께 만드는 우리 동네 무장애 생활지도
+          함께 만드는 우리 동네 바퀴지도
         </div>
       </div>
 
@@ -5174,6 +5391,107 @@ return (
     width: "100%",
   }}
 >
+  <button
+  type="button"
+  onClick={openOpinionSurvey}
+  style={{
+    width: "100%",
+    marginBottom: "14px",
+    padding: "11px 13px",
+    boxSizing: "border-box",
+    border: "1px solid #FED7AA",
+    borderRadius: "16px",
+    background: "rgba(255, 247, 237, 0.96)",
+    boxShadow: "0 6px 15px rgba(154, 52, 18, 0.08)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "10px",
+    cursor: "pointer",
+    textAlign: "left",
+  }}
+>
+  <div
+    style={{
+      minWidth: 0,
+      display: "flex",
+      alignItems: "center",
+      gap: "9px",
+    }}
+  >
+    <span
+      style={{
+        flexShrink: 0,
+        fontSize: "23px",
+      }}
+    >
+      {SURVEY_COUNT < SURVEY_LIMIT ? "☕" : "💬"}
+    </span>
+
+    <div style={{ minWidth: 0 }}>
+      <div
+        style={{
+          color: "#9A3412",
+          fontSize: "13.5px",
+          fontWeight: "900",
+          lineHeight: 1.3,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {SURVEY_COUNT < SURVEY_LIMIT
+          ? "1분 설문 · 커피 쿠폰"
+          : "1분 의견 설문"}
+      </div>
+
+      <div
+        style={{
+          marginTop: "2px",
+          color: "#78716C",
+          fontSize: "10.5px",
+          fontWeight: "700",
+          lineHeight: 1.3,
+        }}
+      >
+        휠더월드에 의견을 들려주세요
+      </div>
+    </div>
+  </div>
+
+  <div
+    style={{
+      flexShrink: 0,
+      display: "flex",
+      alignItems: "center",
+      gap: "7px",
+    }}
+  >
+    {SURVEY_COUNT < SURVEY_LIMIT && (
+      <span
+  style={{
+    padding: "5px 8px",
+    borderRadius: "999px",
+    background: "white",
+    color: "#EA580C",
+    fontSize: "9.5px",
+    fontWeight: "900",
+    whiteSpace: "nowrap",
+  }}
+>
+  현재 참여 {SURVEY_COUNT}/{SURVEY_LIMIT}
+</span>
+    )}
+
+    <span
+      style={{
+        color: "#C2410C",
+        fontSize: "18px",
+        fontWeight: "900",
+      }}
+    >
+      ›
+    </span>
+  </div>
+</button>
   <button
     onClick={openSearchView}
     style={{
@@ -5500,73 +5818,255 @@ return (
             {/* 왼쪽 사이드바 영역 */}
             <div style={{ 
               width: isMobile ? "100%" : "320px",
-              height: isMobile ? "250px" : "100%", 
+              height: isMobile ? "auto" : "100%",
               background: "#ffffff", 
               borderRight: "1px solid #EAEAEA", 
-              padding: "20px 16px", 
-              overflowY: "auto", 
+              padding: isMobile ? "7px 14px 5px" : "20px 16px", 
+              overflowY: isMobile ? "visible" : "auto",
               display: "flex", 
               flexDirection: "column", 
-              gap: "15px" 
+              gap: "8px" 
             }}>
               
-              
+              {isRouteSearched && routeInfo ? (
+  <div
+    style={{
+      width: "100%",
+      padding: "10px 11px",
+      boxSizing: "border-box",
+      borderRadius: "14px",
+      background: "#FFFFFF",
+      border: "1px solid #E2E8F0",
+      boxShadow: "0 4px 12px rgba(15,23,42,0.07)",
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "10px",
+      }}
+    >
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+        }}
+      >
+        <div
+          style={{
+            overflow: "hidden",
+            color: "#1E293B",
+            fontSize: "12.5px",
+            fontWeight: "900",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {startPoint || "출발지"} → {endPoint || "목적지"}
+        </div>
+
+        <div
+          style={{
+            marginTop: "3px",
+            color: "#64748B",
+            fontSize: "10.5px",
+            fontWeight: "700",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {routeMode === "normal"
+            ? "일반길"
+            : routeMode === "wheel2"
+            ? "바퀴길"
+            : "바퀴+길"}
+
+          {(() => {
+  const isGuiding =
+    (isNavigationActive || isNavigationFinished) &&
+    typeof distanceToDestination === "number";
+
+  const totalDistanceM =
+    Number(routeInfo?.distance || 0) * 1000;
+
+  const totalDurationMin =
+    Number(routeInfo?.duration || 0);
+
+  const remainingDistanceM = isGuiding
+    ? Math.max(0, distanceToDestination)
+    : null;
+
+  const displayedDistanceKm = isGuiding
+    ? (remainingDistanceM / 1000).toFixed(1)
+    : routeInfo?.distance;
+
+  const displayedDurationMin =
+    isGuiding &&
+    totalDistanceM > 0 &&
+    totalDurationMin > 0
+      ? remainingDistanceM <= 20
+        ? 0
+        : Math.max(
+            1,
+            Math.round(
+              (remainingDistanceM / totalDistanceM) *
+                totalDurationMin
+            )
+          )
+      : routeInfo?.duration;
+
+  return (
+    <>
+      {displayedDistanceKm != null && (
+        <span> · {displayedDistanceKm}km</span>
+      )}
+
+      {displayedDurationMin != null && (
+        <span> · {displayedDurationMin}분</span>
+      )}
+    </>
+  );
+})()}
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setIsRouteSearched(false)}
+        style={{
+          flexShrink: 0,
+          height: "32px",
+          padding: "0 10px",
+          border: "1px solid #BFDBFE",
+          borderRadius: "9px",
+          background: "#EFF6FF",
+          color: "#2563EB",
+          fontSize: "10.5px",
+          fontWeight: "900",
+          fontFamily: "inherit",
+          cursor: "pointer",
+          whiteSpace: "nowrap",
+        }}
+      >
+        다시 검색
+      </button>
+    </div>
+  </div>
+) : (
               <form 
                 onSubmit={handleSearchRoute} 
                 onClick={(e) => e.stopPropagation()} 
-                style={{ 
-                  display: "flex", 
-                  flexDirection: "column", 
-                  gap: "3px", 
-                  background: "#F8FAFC", 
-                  padding: "1px", 
-                  borderRadius: "16px", 
-                  border: "1px solid #E2E8F0" 
-                }}
+                style={{
+  display: "flex",
+  flexDirection: "column",
+  gap: "6px",
+  width: "100%",
+  padding: 0,
+  margin: 0,
+  background: "#FFFFFF",
+  border: "none",
+  borderRadius: 0,
+  boxSizing: "border-box",
+}}
               ><div onClick={(e) => e.stopPropagation()} style={{ position: "relative" }}>
 <div
   style={{
-    display: "flex",
-    gap: "4px",
-    marginBottom: "15px",
-    padding: "4px",
-    background: "#E2E8F0",
-    borderRadius: "8px"
+    marginBottom: "8px",
   }}
 >
-  {[
-    { id: "normal", label: "일반 모드" },
-    { id: "wheel1", label: "바퀴 모드 1" },
-    { id: "wheel2", label: "바퀴 모드 2" }
-  ].map((mode) => (
-    <button
-      key={mode.id}
-      type="button"
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setRouteMode(mode.id);
-      }}
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      gap: "7px",
+    }}
+  >
+    <div
       style={{
-        flex: 1,
-        padding: "8px 0",
-        border: "none",
-        borderRadius: "6px",
-        fontSize: "14px",
-        fontWeight: routeMode === mode.id ? "600" : "400",
-        background:
-          routeMode === mode.id ? "white" : "transparent",
-        color:
-          routeMode === mode.id ? "#1E293B" : "#475569",
-        cursor: "pointer",
-        transition: "all 0.2s ease"
+        flexShrink: 0,
+        color: "#334155",
+        fontSize: "12px",
+        fontWeight: "900",
+        whiteSpace: "nowrap",
       }}
     >
-      {mode.label}
-    </button>
-  ))}
+      길 선택
+    </div>
+
+    <div
+  role="radiogroup"
+  aria-label="길 유형 선택"
+  style={{
+    flex: 1,
+    display: "grid",
+    gridTemplateColumns: "repeat(3, 1fr)",
+    padding: "3px",
+    borderRadius: "11px",
+    background: "#F1F5F9",
+  }}
+>
+      {[
+        { id: "normal", label: "일반길" },
+        { id: "wheel2", label: "바퀴길" },
+        { id: "wheel1", label: "바퀴+길" },
+      ].map((mode) => {
+        const isSelected = routeMode === mode.id;
+
+        return (
+          <button
+            key={mode.id}
+            type="button"
+            role="radio"
+            aria-checked={isSelected}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setRouteMode(mode.id);
+            }}
+            style={{
+              minWidth: 0,
+              padding: "7px 2px",
+             borderRadius: "8px",
+border: "none",
+background: isSelected ? "#2563EB" : "transparent",
+              color: isSelected ? "#FFFFFF" : "#475569",
+              fontSize: "11.5px",
+              fontWeight: "900",
+              cursor: "pointer",
+              boxShadow: isSelected
+                ? "0 2px 6px rgba(37,99,235,0.18)"
+                : "none",
+            }}
+          >
+            {mode.label}
+          </button>
+        );
+      })}
+    </div>
+  </div>
+
+  <div
+    aria-live="polite"
+    style={{
+      marginTop: "4px",
+      marginLeft: "48px",
+      color: "#64748B",
+      fontSize: "10.5px",
+      lineHeight: 1.3,
+      wordBreak: "keep-all",
+    }}
+  >
+    {routeMode === "normal" &&
+      "장애물 정보를 반영하지 않는 기본 경로예요."}
+
+    {routeMode === "wheel2" &&
+      "가벼운 장애물이 있어 함께 이동하기 좋아요."}
+
+    {routeMode === "wheel1" &&
+      "등록된 장애물을 최대한 피해 더 편하게 이동해요."}
+  </div>
 </div>
-  
   {/* 📍 입력창과 버튼을 나란히 배치 */}
   <div style={{ display: "flex", gap: "5px" }}>
     <input
@@ -5581,13 +6081,21 @@ return (
     setStartSuggestions
   );
 }}
-      placeholder="출발지 입력 또는 선택"
+      placeholder="출발지를 입력하세요"
       style={{
-        flex: 1, // 남은 공간 모두 차지
-        padding: "10px",
-        borderRadius: "8px",
-        border: "1px solid #CBD5E1"
-      }}
+  flex: 1,
+  minWidth: 0,
+  height: "38px",
+  padding: "0 11px",
+  boxSizing: "border-box",
+  borderRadius: "10px",
+  border: "1px solid #DCE3EC",
+  background: "#FFFFFF",
+  color: "#1E293B",
+  fontSize: "12.5px",
+  fontFamily: "inherit",
+  outline: "none",
+}}
     />
    <button
   type="button"
@@ -5600,18 +6108,20 @@ return (
     );
   }}
   style={{
-    width: "58px",
-    minWidth: "58px",
-    padding: "0 8px",
-    borderRadius: "8px",
-    background: "#3B82F6",
-    color: "white",
-    border: "none",
-    cursor: "pointer",
-    fontWeight: "900",
-    fontSize: "12px",
-    whiteSpace: "nowrap",
-  }}
+  flexShrink: 0,
+  width: "64px",
+  height: "38px",
+  padding: "0 7px",
+  borderRadius: "10px",
+  border: "1px solid #BFDBFE",
+  background: "#EFF6FF",
+  color: "#2563EB",
+  fontSize: "11.5px",
+  fontWeight: "850",
+  fontFamily: "inherit",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+}}
 >
   내 위치
 </button>
@@ -5661,13 +6171,21 @@ return (
     setEndSuggestions
   );
 }}
-      placeholder="목적지 입력 또는 선택"
+      placeholder="목적지를 입력하세요"
       style={{
-        flex: 1,
-        padding: "10px",
-        borderRadius: "8px",
-        border: "1px solid #CBD5E1"
-      }}
+  flex: 1,
+  minWidth: 0,
+  height: "38px",
+  padding: "0 11px",
+  boxSizing: "border-box",
+  borderRadius: "10px",
+  border: "1px solid #DCE3EC",
+  background: "#FFFFFF",
+  color: "#1E293B",
+  fontSize: "12.5px",
+  fontFamily: "inherit",
+  outline: "none",
+}}
     />
     <button
   type="button"
@@ -5678,18 +6196,20 @@ return (
     )
   }
   style={{
-    width: "58px",
-    minWidth: "58px",
-    padding: "0 8px",
-    borderRadius: "8px",
-    background: "#3B82F6",
-    color: "white",
-    border: "none",
-    cursor: "pointer",
-    fontWeight: "900",
-    fontSize: "12px",
-    whiteSpace: "nowrap",
-  }}
+  flexShrink: 0,
+  width: "64px",
+  height: "38px",
+  padding: "0 7px",
+  borderRadius: "10px",
+  border: "1px solid #BFDBFE",
+  background: "#EFF6FF",
+  color: "#2563EB",
+  fontSize: "11.5px",
+  fontWeight: "850",
+  fontFamily: "inherit",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+}}
 >
   내 위치
 </button>
@@ -5721,35 +6241,46 @@ return (
 )}
                 </div>
 
-                <button type="submit" style={{ 
-                  width: "100%", 
-                  padding: "12px", 
-                  background: "#1976D2", 
-                  color: "#fff", 
-                  border: "none", 
-                  borderRadius: "10px", 
-                  fontWeight: "700",
-                  cursor: "pointer"
-                }}>
+                <button type="submit" style={{
+  width: "100%",
+  height: "40px",
+  marginTop: "1px",
+  padding: "0 14px",
+  boxSizing: "border-box",
+  border: "none",
+  borderRadius: "11px",
+  background: "#2563EB",
+  color: "#FFFFFF",
+  fontSize: "13.5px",
+  fontWeight: "900",
+  fontFamily: "inherit",
+  letterSpacing: "-0.2px",
+  cursor: "pointer",
+  boxShadow: "0 5px 12px rgba(37,99,235,0.2)",
+}}>
                   🚀 안전 경로 탐색
                 </button>
               </form>
+              )}
 
             
             </div>
 
             {/* 오른쪽 지도 영역 */}
-            <div style={{ 
-              flex: 1, 
-              position: "relative",
-              height: isMobile ? "calc(100vh - 250px)" : "100%" 
-            }}>
+            <div
+  style={{
+    flex: 1,
+    minHeight: 0,
+    position: "relative",
+    height: isMobile ? "auto" : "100%",
+  }}
+>
               
             {routeInfo && (
   <div
     style={{
       position: "absolute",
-      top: "12px",
+      top: "4px",
       left: "50%",
       transform: "translateX(-50%)",
       zIndex: 30,
@@ -5760,70 +6291,7 @@ return (
       gap: "8px",
     }}
   >
-    {(() => {
-      const totalDistanceKm = Number(routeInfo.distance || 0);
-      const totalDistanceM = totalDistanceKm * 1000;
-      const totalDurationMin = Number(routeInfo.duration || 0);
-
-      const remainingDistanceM =
-        typeof distanceToDestination === "number"
-          ? distanceToDestination
-          : null;
-
-      const remainingDistanceKm =
-        remainingDistanceM !== null
-          ? (remainingDistanceM / 1000).toFixed(1)
-          : null;
-
-      const remainingDurationMin =
-        remainingDistanceM !== null &&
-        totalDistanceM > 0 &&
-        totalDurationMin > 0
-          ? Math.max(
-              1,
-              Math.round((remainingDistanceM / totalDistanceM) * totalDurationMin)
-            )
-          : null;
-
-      const isGuiding =
-        (isNavigationActive || isNavigationFinished) &&
-        remainingDistanceM !== null;
-
-      return (
-        <div
-          style={{
-            background: "rgba(255,255,255,0.96)",
-            padding: "10px 16px",
-            borderRadius: "999px",
-            boxShadow: "0 8px 20px rgba(15,23,42,0.18)",
-            display: "flex",
-            alignItems: "center",
-            gap: "12px",
-            fontSize: "14px",
-            fontWeight: "800",
-            color: "#0F172A",
-            pointerEvents: "none",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {isGuiding ? (
-            <>
-              <span style={{ color: "#1D4ED8", fontWeight: "900" }}>
-                안내 중
-              </span>
-              <span>📍 {remainingDistanceKm}km</span>
-              <span>⏱ {remainingDurationMin}분</span>
-            </>
-          ) : (
-            <>
-              <span>이동장애 요소 {routeInfo.obstacleCount ?? 0}</span>
-              <span>📍 {routeInfo.distance}km</span>
-              <span>⏱ {routeInfo.duration}분</span>
-            </>
-          )}
-        </div>
-      );
-    })()}
+   
     {routeSteps.length > 0 && !isNavigationActive && !isNavigationFinished && (
   <button
     type="button"
@@ -5844,17 +6312,23 @@ return (
 });
     }}
     style={{
-      pointerEvents: "auto",
-      border: "none",
-      borderRadius: "999px",
-      padding: "8px 16px",
-      background: "#2563EB",
-      color: "white",
-      fontSize: "13px",
-      fontWeight: "900",
-      boxShadow: "0 4px 12px rgba(0,0,0,0.18)",
-      cursor: "pointer",
-    }}
+  height: "34px",
+  padding: "0 14px",
+
+  border: "1px solid #1D6FEA",
+  borderRadius: "3px",
+  background: "#2F80ED",
+  color: "#FFFFFF",
+
+  fontSize: "11.5px",
+  fontWeight: "900",
+  fontFamily: "inherit",
+  whiteSpace: "nowrap",
+
+  boxShadow: "0 1px 2px rgba(0,0,0,0.18)",
+  cursor: "pointer",
+  pointerEvents: "auto",
+}}
   >
     안내 시작
   </button>
@@ -5888,138 +6362,316 @@ return (
       position: "fixed",
       inset: 0,
       zIndex: 9999,
-      background: "rgba(15,23,42,0.45)",
+      background: "rgba(15,23,42,0.5)",
+      backdropFilter: "blur(5px)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
       padding: "18px",
+      boxSizing: "border-box",
     }}
   >
     <div
       style={{
-        width: "100%",
-        maxWidth: "360px",
+        position: "relative",
+        width: "min(390px, 100%)",
+        maxHeight: "calc(100vh - 36px)",
+        overflowY: "auto",
+        boxSizing: "border-box",
+        padding: "22px",
+        borderRadius: "26px",
         background: "white",
-        borderRadius: "20px",
-        padding: "20px",
-        boxShadow: "0 20px 50px rgba(0,0,0,0.25)",
+        boxShadow: "0 24px 60px rgba(15,23,42,0.25)",
       }}
     >
-      <div
+      <button
+        type="button"
+        onClick={closeNavigationFeedbackModal}
         style={{
-          fontSize: "18px",
+          position: "absolute",
+          top: "12px",
+          right: "12px",
+          width: "32px",
+          height: "32px",
+          border: "none",
+          borderRadius: "50%",
+          background: "#F1F5F9",
+          color: "#475569",
+          fontSize: "19px",
           fontWeight: "900",
-          color: "#0F172A",
-          marginBottom: "6px",
+          cursor: "pointer",
         }}
       >
-        경로 안내는 어땠나요?
-      </div>
+        ×
+      </button>
 
-      <div
-        style={{
-          fontSize: "13px",
-          color: "#64748B",
-          lineHeight: 1.5,
-          marginBottom: "14px",
-        }}
-      >
-        별점과 간단한 의견을 남겨주시면 경로 추천 개선에 활용됩니다.
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          gap: "6px",
-          marginBottom: "14px",
-        }}
-      >
-        {[1, 2, 3, 4, 5].map((star) => (
-          <button
-            key={star}
-            type="button"
-            onClick={() => setNavigationFeedbackRating(star)}
+      {!navigationFeedbackSaved ? (
+        <>
+          <div
             style={{
-              border: "none",
-              background: "transparent",
-              fontSize: "30px",
-              cursor: "pointer",
-              padding: "2px",
-              filter:
-                star <= navigationFeedbackRating
-                  ? "none"
-                  : "grayscale(1)",
-              opacity: star <= navigationFeedbackRating ? 1 : 0.35,
+              marginTop: "4px",
+              color: "#0F172A",
+              fontSize: "21px",
+              fontWeight: "950",
+              textAlign: "center",
+              letterSpacing: "-0.5px",
             }}
           >
-            ⭐
+            휠더월드, 어떠셨나요? 💙
+          </div>
+
+          <div
+            style={{
+              marginTop: "6px",
+              color: "#64748B",
+              fontSize: "13px",
+              lineHeight: 1.5,
+              textAlign: "center",
+            }}
+          >
+            이용한 경로에 별점을 남겨주세요.
+          </div>
+
+          {SURVEY_COUNT < SURVEY_LIMIT && (
+            <div
+              style={{
+                marginTop: "15px",
+                padding: "12px",
+                borderRadius: "15px",
+                background:
+                  "linear-gradient(135deg, #FFF7ED, #FFFBEB)",
+                border: "1px solid #FED7AA",
+                color: "#9A3412",
+                textAlign: "center",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "14px",
+                  fontWeight: "900",
+                }}
+              >
+                ☕ 1분 설문 제출자 선착순 10명
+              </div>
+
+              <div
+                style={{
+                  marginTop: "3px",
+                  fontSize: "12px",
+                  lineHeight: 1.45,
+                }}
+              >
+                커피 쿠폰을 드려요!
+              </div>
+
+              <div
+                style={{
+                  marginTop: "6px",
+                  fontSize: "11px",
+                  fontWeight: "800",
+                }}
+              >
+                현재 참여 {SURVEY_COUNT} / {SURVEY_LIMIT}
+              </div>
+            </div>
+          )}
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              gap: "6px",
+              marginTop: "19px",
+            }}
+          >
+            {[1, 2, 3, 4, 5].map((score) => (
+              <button
+                key={score}
+                type="button"
+                onClick={() =>
+                  setNavigationFeedbackRating(score)
+                }
+                aria-label={`${score}점`}
+                style={{
+                  padding: "2px",
+                  border: "none",
+                  background: "transparent",
+                  color:
+                    score <= navigationFeedbackRating
+                      ? "#FBBF24"
+                      : "#CBD5E1",
+                  fontSize: "38px",
+                  lineHeight: 1,
+                  cursor: "pointer",
+                  transition: "transform 0.15s ease",
+                }}
+              >
+                ★
+              </button>
+            ))}
+          </div>
+
+          <div
+            style={{
+              minHeight: "20px",
+              marginTop: "7px",
+              color: "#64748B",
+              fontSize: "12px",
+              fontWeight: "700",
+              textAlign: "center",
+            }}
+          >
+            {navigationFeedbackRating > 0
+              ? `${navigationFeedbackRating}점을 선택했어요`
+              : "별점을 선택해 주세요"}
+          </div>
+
+          <textarea
+            value={navigationFeedbackComment}
+            onChange={(e) =>
+              setNavigationFeedbackComment(e.target.value)
+            }
+            placeholder="이용하며 느낀 점이 있다면 남겨주세요. (선택)"
+            style={{
+              width: "100%",
+              height: "82px",
+              marginTop: "13px",
+              padding: "11px",
+              boxSizing: "border-box",
+              border: "1px solid #CBD5E1",
+              borderRadius: "14px",
+              resize: "none",
+              color: "#334155",
+              fontSize: "13px",
+              fontFamily: "inherit",
+              outline: "none",
+            }}
+          />
+
+          <button
+            type="button"
+            disabled={
+              navigationFeedbackRating === 0 ||
+              isSavingNavigationFeedback
+            }
+            onClick={saveNavigationFeedback}
+            style={{
+              width: "100%",
+              marginTop: "13px",
+              padding: "13px",
+              border: "none",
+              borderRadius: "14px",
+              background:
+                navigationFeedbackRating === 0
+                  ? "#CBD5E1"
+                  : "linear-gradient(135deg, #3B82F6, #2563EB)",
+              color: "white",
+              fontSize: "14px",
+              fontWeight: "900",
+              cursor:
+                navigationFeedbackRating === 0
+                  ? "not-allowed"
+                  : "pointer",
+            }}
+          >
+            {isSavingNavigationFeedback
+              ? "저장 중..."
+              : "별점 남기고 계속하기"}
           </button>
-        ))}
-      </div>
 
-      <textarea
-        value={navigationFeedbackComment}
-        onChange={(e) => setNavigationFeedbackComment(e.target.value)}
-        placeholder="예: 경로는 좋았는데 중간에 턱이 하나 있었어요."
-        rows={4}
-        style={{
-          width: "100%",
-          boxSizing: "border-box",
-          border: "1px solid #CBD5E1",
-          borderRadius: "12px",
-          padding: "12px",
-          fontSize: "14px",
-          resize: "none",
-          outline: "none",
-          marginBottom: "14px",
-        }}
-      />
+          <button
+            type="button"
+            onClick={openOpinionSurvey}
+            style={{
+              width: "100%",
+              marginTop: "10px",
+              padding: "7px",
+              border: "none",
+              background: "transparent",
+              color: "#64748B",
+              fontSize: "12px",
+              fontWeight: "800",
+              textDecoration: "underline",
+              cursor: "pointer",
+            }}
+          >
+            설문부터 참여할게요 〉
+          </button>
 
-      <div
-        style={{
-          display: "flex",
-          gap: "8px",
-          justifyContent: "flex-end",
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => {
-            setShowNavigationFeedback(false);
-            setNavigationFeedbackRating(0);
-            setNavigationFeedbackComment("");
-          }}
-          style={{
-            border: "none",
-            borderRadius: "10px",
-            padding: "10px 12px",
-            background: "#E2E8F0",
-            color: "#334155",
-            fontWeight: "900",
-            cursor: "pointer",
-          }}
-        >
-          건너뛰기
-        </button>
+          {SURVEY_COUNT < SURVEY_LIMIT && (
+            <div
+              style={{
+                marginTop: "4px",
+                color: "#94A3B8",
+                fontSize: "10.5px",
+                lineHeight: 1.45,
+                textAlign: "center",
+                wordBreak: "keep-all",
+              }}
+            >
+              커피 쿠폰은 별점 참여와 별도로,
+              <br />
+              1분 설문 제출 완료자를 대상으로 제공됩니다.
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div
+            style={{
+              marginTop: "6px",
+              marginBottom: "16px",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontSize: "34px" }}>💙</div>
 
-        <button
-          type="button"
-          disabled={isSavingNavigationFeedback}
-          onClick={saveNavigationFeedback}
-          style={{
-            border: "none",
-            borderRadius: "10px",
-            padding: "10px 14px",
-            background: "#2563EB",
-            color: "white",
-            fontWeight: "900",
-            cursor: isSavingNavigationFeedback ? "not-allowed" : "pointer",
-            opacity: isSavingNavigationFeedback ? 0.6 : 1,
-          }}
-        >
-          {isSavingNavigationFeedback ? "저장 중..." : "의견 저장"}
-        </button>
-      </div>
+            <div
+              style={{
+                marginTop: "7px",
+                color: "#0F172A",
+                fontSize: "20px",
+                fontWeight: "950",
+              }}
+            >
+              별점을 남겨주셔서 감사해요!
+            </div>
+
+            <div
+              style={{
+                marginTop: "5px",
+                color: "#64748B",
+                fontSize: "12.5px",
+                lineHeight: 1.5,
+              }}
+            >
+              여러분의 평가가 휠더월드를
+              <br />
+              더 나은 서비스로 만드는 데 도움이 됩니다.
+            </div>
+          </div>
+
+          <SurveyInviteCard compact />
+
+          <button
+            type="button"
+            onClick={closeNavigationFeedbackModal}
+            style={{
+              width: "100%",
+              marginTop: "11px",
+              padding: "9px",
+              border: "none",
+              background: "transparent",
+              color: "#64748B",
+              fontSize: "12px",
+              fontWeight: "800",
+              cursor: "pointer",
+            }}
+          >
+            다음에 할게요
+          </button>
+        </>
+      )}
     </div>
   </div>
 )}
