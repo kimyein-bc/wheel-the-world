@@ -285,6 +285,8 @@ const compressImageToDataUrl = (file, maxWidth = 900, quality = 0.68) => {
 const KakaoMapTest = ({
   bfMarkers = [],
   routeSteps = [],
+  isRainyMode = DEFAULT_RAINY_MODE,
+weatherInfo = null,
   startMarkerPos = null,
   endMarkerPos = null,
   userLocation = null,
@@ -740,7 +742,7 @@ const validMarkers = markerSource
     (m) =>
       !Number.isNaN(m.lat) &&
       !Number.isNaN(m.lng) &&
-      (m.type !== "puddle" || IS_RAINY_MODE)
+      (m.type !== "puddle" || isRainyMode)
   );
   validMarkers.forEach((m) => {
   const info = getKakaoMarkerInfo(m.type);
@@ -908,7 +910,7 @@ useEffect(() => {
     clearTimeout(timer2);
     clearTimeout(timer3);
   };
-}, [isKakaoMapReady, bfMarkers]);
+}, [isKakaoMapReady, bfMarkers,isRainyMode]);
 useEffect(() => {
   if (
     !isKakaoMapReady ||
@@ -1393,6 +1395,8 @@ const KakaoCreateMap = ({
   bfConfig,
   wheelLevel,
   setWheelLevel,
+  isRainyMode = DEFAULT_RAINY_MODE,
+weatherInfo = null,
 }) => {
  const mapDivRef = useRef(null);
 const kakaoMapRef = useRef(null);
@@ -1491,7 +1495,7 @@ const validMarkers = markerSource
     (m) =>
       !Number.isNaN(m.lat) &&
       !Number.isNaN(m.lng) &&
-      (m.type !== "puddle" || IS_RAINY_MODE)
+      (m.type !== "puddle" || isRainyMode)
   );
 
     validMarkers.forEach((m) => {
@@ -1842,7 +1846,7 @@ if (newMarkerImage) {
     clearTimeout(timer2);
     clearTimeout(timer3);
   };
-}, [isCreateMapReady, bfMarkers, tempMarker]);
+}, [isCreateMapReady, bfMarkers, tempMarker, isRainyMode]);
 useEffect(() => {
   if (
     !isCreateMapReady ||
@@ -3157,7 +3161,7 @@ const SurveyInviteCard = ({ compact = false }) => {
 // true  = 물고임 아이콘 표시
 // false = 물고임 아이콘 숨김
 // ================================
-const IS_RAINY_MODE = true;
+const DEFAULT_RAINY_MODE = false;
 
 function App() {
   const KAKAO_REST_API_KEY = "1425cc58ea2a07e5aea6e01a9b0dac74";
@@ -3535,7 +3539,55 @@ const [surveyTrack, setSurveyTrack] = useState([]);
   const [startCoords, setStartCoords] = useState(null);
 const [endCoords, setEndCoords] = useState(null);
  
+const [isRainyMode, setIsRainyMode] = useState(DEFAULT_RAINY_MODE);
+const [weatherInfo, setWeatherInfo] = useState(null);
+useEffect(() => {
+  let isCancelled = false;
 
+  const loadWeatherInfo = async () => {
+    try {
+      const isLocalhost =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1";
+
+if (isLocalhost) {
+  console.log(
+    "🌦 로컬 개발 환경: 날씨 API 호출 생략. 배포 사이트에서는 자동 연동됩니다."
+  );
+
+  setIsRainyMode(DEFAULT_RAINY_MODE);
+  setWeatherInfo(null);
+  return;
+}
+
+const response = await fetch("/api/weather");
+      const data = await response.json();
+
+      if (isCancelled) return;
+
+      if (data.ok) {
+        setIsRainyMode(Boolean(data.isRainy));
+        setWeatherInfo(data);
+
+        console.log("🌦 기상청 날씨 정보:", data);
+      } else {
+        console.warn("기상청 날씨 정보 불러오기 실패:", data);
+        setIsRainyMode(DEFAULT_RAINY_MODE);
+      }
+    } catch (error) {
+      if (isCancelled) return;
+
+      console.warn("기상청 날씨 정보 요청 오류:", error);
+      setIsRainyMode(DEFAULT_RAINY_MODE);
+    }
+  };
+
+  loadWeatherInfo();
+
+  return () => {
+    isCancelled = true;
+  };
+}, []);
   // 💡 5번 클릭 감지를 위한 상태 및 타이머 설정
 const [clickCount, setClickCount] = useState(0);
 const clickTimeoutRef = useRef(null);
@@ -6760,6 +6812,8 @@ background: isSelected ? "#2563EB" : "transparent",
     .filter((m) => m.status === "approved" || m.isOfficial === true)
     .filter(isMarkerTypeVisible)}
       routeSteps={routeSteps}
+      isRainyMode={isRainyMode}
+weatherInfo={weatherInfo}
       startMarkerPos={startMarkerPos}
       endMarkerPos={endMarkerPos}
       userLocation={userLocation}
@@ -7069,6 +7123,8 @@ background: isSelected ? "#2563EB" : "transparent",
       bfMarkers={bfMarkers.filter(isMarkerTypeVisible)}
       userLocation={userLocation}
       deviceHeading={deviceHeading}
+      isRainyMode={isRainyMode}
+weatherInfo={weatherInfo}
       mapRef={mapRef}
       userRole={userRole}
       isAdminLoggedIn={isAdminLoggedIn}
