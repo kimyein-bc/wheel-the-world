@@ -2922,6 +2922,130 @@ const CuteCartoonBackground = () => (
   </>
 );
 
+function RainOverlay() {
+  const drops = Array.from({ length: 46 }, (_, index) => ({
+    id: index,
+    left: `${(index * 29) % 100}%`,
+    delay: `${(index * 0.13) % 2.2}s`,
+    duration: `${0.85 + (index % 6) * 0.11}s`,
+    height: `${20 + (index % 5) * 7}px`,
+    opacity: 0.3 + (index % 5) * 0.08,
+  }));
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 1,
+        pointerEvents: "none",
+        overflow: "hidden",
+
+        // 전체적으로 하늘을 살짝 우중충하게 덮음
+        background:
+          "linear-gradient(180deg, rgba(71, 85, 105, 0.28), rgba(148, 163, 184, 0.12) 45%, rgba(255, 255, 255, 0.04))",
+        backdropFilter: "saturate(0.85)",
+      }}
+    >
+      <style>
+        {`
+          @keyframes wheelRainFall {
+            0% {
+              transform: translateY(-70px) translateX(0);
+            }
+            100% {
+              transform: translateY(110vh) translateX(-24px);
+            }
+          }
+
+          @keyframes wheelCloudFloat {
+            0% {
+              transform: translateX(-8px);
+            }
+            50% {
+              transform: translateX(10px);
+            }
+            100% {
+              transform: translateX(-8px);
+            }
+          }
+        `}
+      </style>
+
+      {/* 해와 맑은 하늘을 살짝 가리는 구름층 */}
+      <div
+        style={{
+          position: "absolute",
+          top: "5%",
+          left: "7%",
+          width: "190px",
+          height: "70px",
+          borderRadius: "999px",
+          background: "rgba(148, 163, 184, 0.55)",
+          filter: "blur(1px)",
+          animation: "wheelCloudFloat 7s ease-in-out infinite",
+        }}
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          top: "2%",
+          right: "8%",
+          width: "230px",
+          height: "82px",
+          borderRadius: "999px",
+          background: "rgba(100, 116, 139, 0.48)",
+          filter: "blur(1.2px)",
+          animation: "wheelCloudFloat 8s ease-in-out infinite",
+        }}
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          top: "14%",
+          left: "38%",
+          width: "260px",
+          height: "90px",
+          borderRadius: "999px",
+          background: "rgba(203, 213, 225, 0.38)",
+          filter: "blur(1.5px)",
+          animation: "wheelCloudFloat 9s ease-in-out infinite",
+        }}
+      />
+
+      {/* 화면 전체를 한 번 더 흐리게 */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "rgba(15, 23, 42, 0.08)",
+        }}
+      />
+
+      {/* 빗줄기 */}
+      {drops.map((drop) => (
+        <div
+          key={drop.id}
+          style={{
+            position: "absolute",
+            top: "-80px",
+            left: drop.left,
+            width: "2px",
+            height: drop.height,
+            borderRadius: "999px",
+            background:
+              "linear-gradient(180deg, rgba(255,255,255,0.12), rgba(56,189,248,0.75))",
+            opacity: drop.opacity,
+            animation: `wheelRainFall ${drop.duration} linear infinite`,
+            animationDelay: drop.delay,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 const SimpleTextLogo = () => {
   // 현재 경로가 '/' (홈)인지 확인
   const isHomePage = window.location.pathname === "/";
@@ -3453,7 +3577,7 @@ const bfConfig = {
   step: { label: "🪜 단차 / 계단", color: "#EF4444", icon: "🪜" },
   narrow: { label: "↔️ 좁은 도로", color: "#F59E0B", icon: "↔️" },
    obstacle: {
-    label: "🚧 실시간 장애물 (공사/웅덩이)",
+    label: "🚧 일시적 장애물 (공사/주차 차량 등)",
     color: "#DC2626",
     icon: "🚧",
 },
@@ -5374,509 +5498,950 @@ return (
 {currentView === "home" && (
   <div
     style={{
-      flex: 1,
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: isMobile ? "10px 14px 14px" : "22px 20px",
       position: "relative",
-      boxSizing: "border-box",
       width: "100%",
+      height: "100vh",
       minHeight: "100vh",
+      maxHeight: "100vh",
       overflow: "hidden",
+      boxSizing: "border-box",
     }}
   >
     {isMobile ? (
-  <CuteCartoonBackground />
-) : (
-  <div
-    style={{
-      position: "fixed",
-      inset: 0,
-      zIndex: 0,
-      overflow: "hidden",
-      pointerEvents: "none",
-    }}
-  >
-    <CuteCartoonBackground />
-  </div>
-)}
-
-    <div
-      style={{
-        position: "relative",
-        zIndex: 2,
-        width: "100%",
-        maxWidth: isMobile ? "370px" : "430px",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        textAlign: "center",
-        transform: isMobile ? "translateY(-42px)" : "translateY(-26px)",
-      }}
-    >
+      <CuteCartoonBackground />
+    ) : (
       <div
         style={{
-          transform: isMobile ? "scale(0.64)" : "scale(0.78)",
-marginTop: isMobile ? "-96px" : "-58px",
-marginBottom: isMobile ? "-178px" : "-96px",
-          filter: "drop-shadow(0 8px 14px rgba(30, 80, 120, 0.12))",
+          position: "fixed",
+          inset: 0,
+          zIndex: 0,
+          overflow: "hidden",
+          pointerEvents: "none",
         }}
       >
-        <SimpleTextLogo />
+        <CuteCartoonBackground />
       </div>
-
-      <div
-        style={{
-          background: "rgba(255,255,255,0.68)",
-          border: "1.5px solid rgba(255,255,255,0.85)",
-          boxShadow: "0 12px 28px rgba(72, 117, 92, 0.12)",
-          backdropFilter: "blur(10px)",
-          borderRadius: "999px",
-          padding: isMobile ? "8px 16px" : "10px 22px",
-marginBottom: isMobile ? "10px" : "14px",
-        }}
-      >
-        <div
-          style={{
-            fontSize: isMobile ? "13px" : "15px",
-            color: "#1976D2",
-            fontWeight: "900",
-            letterSpacing: "0.2px",
-            marginBottom: "2px",
-          }}
-        >
-          모든 길은 모두를 위해
-        </div>
-
-        <div
-          style={{
-            fontSize: isMobile ? "14px" : "16px",
-            color: "#1F2937",
-            fontWeight: "800",
-            lineHeight: "1.35",
-            wordBreak: "keep-all",
-          }}
-        >
-          함께 만드는 우리 동네 바퀴지도
-        </div>
-      </div>
-
-      <div
-  style={{
-    display: "flex",
-    flexDirection: "column",
-    gap: isMobile ? "9px" : "12px",
-    width: "100%",
-  }}
->
-  <button
-  type="button"
-  onClick={openOpinionSurvey}
-  style={{
-    width: "100%",
-    marginBottom: "2px",
-padding: "8px 11px",
-borderRadius: "14px",
-    boxSizing: "border-box",
-    border: "1px solid #FED7AA",
-    background: "rgba(255, 247, 237, 0.96)",
-    boxShadow: "0 6px 15px rgba(154, 52, 18, 0.08)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: "10px",
-    cursor: "pointer",
-    textAlign: "left",
-  }}
->
-  <div
-    style={{
-      minWidth: 0,
-      display: "flex",
-      alignItems: "center",
-      gap: "9px",
-    }}
-  >
-    <span
-      style={{
-        flexShrink: 0,
-        fontSize: "19px",
-      }}
-    >
-      {SURVEY_COUNT < SURVEY_LIMIT ? "☕" : "💬"}
-    </span>
-
-    <div style={{ minWidth: 0 }}>
-      <div
-        style={{
-          color: "#9A3412",
-          fontSize: "12.5px",
-          fontWeight: "900",
-          lineHeight: 1.3,
-          whiteSpace: "nowrap",
-        }}
-      >
-        {SURVEY_COUNT < SURVEY_LIMIT
-          ? "1분 설문 · 커피 쿠폰"
-          : "1분 의견 설문"}
-      </div>
-
-      <div
-        style={{
-          marginTop: "2px",
-          color: "#78716C",
-          fontSize: "10px",
-          fontWeight: "700",
-          lineHeight: 1.3,
-        }}
-      >
-        휠더월드에 의견을 들려주세요
-      </div>
-    </div>
-  </div>
-
-  <div
-    style={{
-      flexShrink: 0,
-      display: "flex",
-      alignItems: "center",
-      gap: "7px",
-    }}
-  >
-    {SURVEY_COUNT < SURVEY_LIMIT && (
-      <span
-  style={{
-    padding: "5px 8px",
-    borderRadius: "999px",
-    background: "white",
-    color: "#EA580C",
-    fontSize: "9.5px",
-    fontWeight: "900",
-    whiteSpace: "nowrap",
-  }}
->
-  현재 참여 {SURVEY_COUNT}/{SURVEY_LIMIT}
-</span>
     )}
 
-    <span
-      style={{
-        color: "#C2410C",
-        fontSize: "18px",
-        fontWeight: "900",
-      }}
-    >
-      ›
-    </span>
-  </div>
-</button>
-  <button
-    onClick={openSearchView}
-    style={{
-      width: "100%",
-      border: "none",
-      borderRadius: "24px",
-padding: isMobile ? "12px 14px" : "16px 18px",
-gap: "12px",
-      background:
-        "linear-gradient(145deg, rgba(255,255,255,0.96), rgba(219,234,254,0.96))",
-      boxShadow:
-        "0 10px 0 rgba(147,197,253,0.5), 0 18px 34px rgba(30,64,175,0.16)",
-      cursor: "pointer",
-      transition: "all 0.18s ease",
-      textAlign: "left",
-      display: "flex",
-      alignItems: "center",
-      position: "relative",
-      overflow: "hidden",
-    }}
-    onMouseEnter={(e) => {
-      e.currentTarget.style.transform = "translateY(-3px)";
-      e.currentTarget.style.boxShadow =
-        "0 13px 0 rgba(147,197,253,0.5), 0 22px 38px rgba(30,64,175,0.2)";
-    }}
-    onMouseLeave={(e) => {
-      e.currentTarget.style.transform = "translateY(0px)";
-      e.currentTarget.style.boxShadow =
-        "0 10px 0 rgba(147,197,253,0.5), 0 18px 34px rgba(30,64,175,0.16)";
-    }}
-  >
-    <div
-      style={{
-        position: "absolute",
-        top: "-35px",
-        right: "-32px",
-        width: "105px",
-        height: "105px",
-        borderRadius: "50%",
-        background: "rgba(147,197,253,0.25)",
-      }}
-    />
+    {isRainyMode && <RainOverlay />}
 
-    <div
-      style={{
-        position: "absolute",
-        bottom: "-24px",
-        left: "35%",
-        width: "120px",
-        height: "48px",
-        borderRadius: "50%",
-        background: "rgba(255,255,255,0.45)",
-      }}
-    />
-
-    <div
-      style={{
-        width: isMobile ? "46px" : "54px",
-height: isMobile ? "46px" : "54px",
-borderRadius: "18px",
-fontSize: isMobile ? "23px" : "27px",
-        background: "linear-gradient(135deg, #60A5FA, #2563EB)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        
-        flexShrink: 0,
-        boxShadow:
-          "inset 0 0 0 2px rgba(255,255,255,0.45), 0 8px 16px rgba(37,99,235,0.25)",
-        position: "relative",
-        zIndex: 1,
-      }}
-    >
-      🗺️
-    </div>
-
-    <div style={{ position: "relative", zIndex: 1, flex: 1 }}>
+    {isRainyMode && (
       <div
         style={{
-          display: "inline-block",
-          background: "rgba(219,234,254,0.95)",
-          color: "#1D4ED8",
-          fontSize: "10.5px",
+          position: "absolute",
+          top: isMobile ? "18px" : "24px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 5,
+          width: "calc(100% - 36px)",
+          maxWidth: isMobile ? "330px" : "420px",
+          padding: isMobile ? "7px 11px" : "8px 14px",
+          borderRadius: "999px",
+          background: "rgba(224, 242, 254, 0.92)",
+          border: "1px solid rgba(125, 211, 252, 0.95)",
+          color: "#075985",
+          fontSize: isMobile ? "11px" : "12px",
           fontWeight: "900",
-          padding: "4px 9px",
-          borderRadius: "999px",
-          marginBottom: "7px",
-          letterSpacing: "-0.2px",
+          textAlign: "center",
+          boxShadow: "0 8px 18px rgba(14, 116, 144, 0.14)",
+          boxSizing: "border-box",
+          pointerEvents: "none",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
         }}
       >
-        바퀴가 편한 길 찾기
+        🌧 비 오는 날 모드 · 물고임 구간 표시 중
       </div>
+    )}
 
+    {isMobile ? (
       <div
         style={{
-          fontSize: isMobile ? "19px" : "21px",
-          fontWeight: "950",
-          color: "#1E3A8A",
-          marginBottom: "5px",
-          letterSpacing: "-0.5px",
+          position: "relative",
+          zIndex: 2,
+          width: "100%",
+          height: "100%",
+          maxWidth: "370px",
+          margin: "0 auto",
+          padding: "18px 18px 18px",
+          boxSizing: "border-box",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          textAlign: "center",
+          transform: "translateY(-42px)",
         }}
       >
-        안전 길찾기
-      </div>
+        <div
+          style={{
+            transform: "scale(0.64)",
+            marginTop: "-96px",
+            marginBottom: "-178px",
+            filter: "drop-shadow(0 8px 14px rgba(30, 80, 120, 0.12))",
+          }}
+        >
+          <SimpleTextLogo />
+        </div>
 
+        <div
+          style={{
+            background: "rgba(255,255,255,0.68)",
+            border: "1.5px solid rgba(255,255,255,0.85)",
+            boxShadow: "0 12px 28px rgba(72, 117, 92, 0.12)",
+            backdropFilter: "blur(10px)",
+            borderRadius: "999px",
+            padding: "8px 16px",
+            marginBottom: "10px",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "13px",
+              color: "#1976D2",
+              fontWeight: "900",
+              marginBottom: "2px",
+            }}
+          >
+            모든 길은 모두를 위해
+          </div>
+
+          <div
+            style={{
+              fontSize: "14px",
+              color: "#1F2937",
+              fontWeight: "800",
+              lineHeight: "1.35",
+              wordBreak: "keep-all",
+            }}
+          >
+            함께 만드는 우리 동네 바퀴지도
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "9px",
+            width: "100%",
+          }}
+        >
+          <button
+            type="button"
+            onClick={openOpinionSurvey}
+            style={{
+              width: "100%",
+              padding: "8px 11px",
+              borderRadius: "14px",
+              border: "1px solid #FED7AA",
+              background: "rgba(255, 247, 237, 0.96)",
+              boxShadow: "0 6px 15px rgba(154, 52, 18, 0.08)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "10px",
+              cursor: "pointer",
+              textAlign: "left",
+              boxSizing: "border-box",
+            }}
+          >
+            <div
+              style={{
+                minWidth: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: "9px",
+              }}
+            >
+              <span style={{ flexShrink: 0, fontSize: "19px" }}>
+                {SURVEY_COUNT < SURVEY_LIMIT ? "☕" : "💬"}
+              </span>
+
+              <div style={{ minWidth: 0 }}>
+                <div
+                  style={{
+                    color: "#9A3412",
+                    fontSize: "12.5px",
+                    fontWeight: "900",
+                    lineHeight: 1.3,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {SURVEY_COUNT < SURVEY_LIMIT
+                    ? "1분 설문 · 커피 쿠폰"
+                    : "1분 의견 설문"}
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "2px",
+                    color: "#78716C",
+                    fontSize: "10px",
+                    fontWeight: "700",
+                    lineHeight: 1.3,
+                  }}
+                >
+                  휠더월드에 의견을 들려주세요
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: "7px",
+              }}
+            >
+              {SURVEY_COUNT < SURVEY_LIMIT && (
+                <span
+                  style={{
+                    padding: "5px 8px",
+                    borderRadius: "999px",
+                    background: "white",
+                    color: "#EA580C",
+                    fontSize: "9.5px",
+                    fontWeight: "900",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  현재 참여 {SURVEY_COUNT}/{SURVEY_LIMIT}
+                </span>
+              )}
+
+              <span
+                style={{
+                  color: "#C2410C",
+                  fontSize: "18px",
+                  fontWeight: "900",
+                }}
+              >
+                ›
+              </span>
+            </div>
+          </button>
+
+          <button
+            onClick={openSearchView}
+            style={{
+              width: "100%",
+              border: "none",
+              borderRadius: "24px",
+              padding: "12px 14px",
+              gap: "12px",
+              background:
+                "linear-gradient(145deg, rgba(255,255,255,0.96), rgba(219,234,254,0.96))",
+              boxShadow:
+                "0 10px 0 rgba(147,197,253,0.5), 0 18px 34px rgba(30,64,175,0.16)",
+              cursor: "pointer",
+              textAlign: "left",
+              display: "flex",
+              alignItems: "center",
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                width: "46px",
+                height: "46px",
+                borderRadius: "18px",
+                fontSize: "23px",
+                background: "linear-gradient(135deg, #60A5FA, #2563EB)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                boxShadow:
+                  "inset 0 0 0 2px rgba(255,255,255,0.45), 0 8px 16px rgba(37,99,235,0.25)",
+              }}
+            >
+              🗺️
+            </div>
+
+            <div style={{ flex: 1 }}>
+              <div
+                style={{
+                  display: "inline-block",
+                  background: "rgba(219,234,254,0.95)",
+                  color: "#1D4ED8",
+                  fontSize: "10.5px",
+                  fontWeight: "900",
+                  padding: "4px 9px",
+                  borderRadius: "999px",
+                  marginBottom: "7px",
+                }}
+              >
+                바퀴가 편한 길 찾기
+              </div>
+
+              <div
+                style={{
+                  fontSize: "19px",
+                  fontWeight: "950",
+                  color: "#1E3A8A",
+                  marginBottom: "5px",
+                }}
+              >
+                안전 길찾기
+              </div>
+
+              <div
+                style={{
+                  fontSize: "11.5px",
+                  color: "#475569",
+                  lineHeight: "1.45",
+                  fontWeight: "650",
+                  wordBreak: "keep-all",
+                }}
+              >
+                단차, 경사, 장애물을 확인하고
+                <br />
+                더 편한 경로를 찾아요.
+              </div>
+            </div>
+
+            <div
+              style={{
+                width: "28px",
+                height: "28px",
+                borderRadius: "50%",
+                background: "rgba(255,255,255,0.95)",
+                color: "#2563EB",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "18px",
+                fontWeight: "900",
+                flexShrink: 0,
+              }}
+            >
+              ›
+            </div>
+          </button>
+
+          <button
+            onClick={openCreateView}
+            style={{
+              width: "100%",
+              border: "none",
+              borderRadius: "24px",
+              padding: "12px 14px",
+              gap: "12px",
+              background:
+                "linear-gradient(145deg, rgba(255,255,255,0.96), rgba(209,250,229,0.96))",
+              boxShadow:
+                "0 10px 0 rgba(110,231,183,0.5), 0 18px 34px rgba(6,95,70,0.14)",
+              cursor: "pointer",
+              textAlign: "left",
+              display: "flex",
+              alignItems: "center",
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                width: "46px",
+                height: "46px",
+                borderRadius: "18px",
+                fontSize: "23px",
+                background: "linear-gradient(135deg, #34D399, #059669)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                boxShadow:
+                  "inset 0 0 0 2px rgba(255,255,255,0.45), 0 8px 16px rgba(5,150,105,0.22)",
+              }}
+            >
+              ✍️
+            </div>
+
+            <div style={{ flex: 1 }}>
+              <div
+                style={{
+                  display: "inline-block",
+                  background: "rgba(209,250,229,0.95)",
+                  color: "#047857",
+                  fontSize: "10.5px",
+                  fontWeight: "900",
+                  padding: "4px 9px",
+                  borderRadius: "999px",
+                  marginBottom: "7px",
+                }}
+              >
+                우리 동네 길 정보 모으기
+              </div>
+
+              <div
+                style={{
+                  fontSize: "17px",
+                  fontWeight: "950",
+                  color: "#065F46",
+                  marginBottom: "5px",
+                }}
+              >
+                주민 제보
+              </div>
+
+              <div
+                style={{
+                  fontSize: "11.5px",
+                  color: "#475569",
+                  lineHeight: "1.45",
+                  fontWeight: "650",
+                  wordBreak: "keep-all",
+                }}
+              >
+                턱, 계단, 보도 파손을
+                <br />
+                지도에 직접 남겨요.
+              </div>
+            </div>
+
+            <div
+              style={{
+                width: "28px",
+                height: "28px",
+                borderRadius: "50%",
+                background: "rgba(255,255,255,0.95)",
+                color: "#059669",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "18px",
+                fontWeight: "900",
+                flexShrink: 0,
+              }}
+            >
+              ›
+            </div>
+          </button>
+        </div>
+
+        <footer
+          onClick={handleSecretDoorClick}
+          style={{
+            position: "absolute",
+            bottom: "10px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            fontSize: "10px",
+            color: "rgba(31,41,55,0.38)",
+            cursor: "pointer",
+            userSelect: "none",
+            background: "rgba(255,255,255,0.38)",
+            padding: "5px 10px",
+            borderRadius: "999px",
+            backdropFilter: "blur(6px)",
+          }}
+        >
+          © 2026 Wheel the World.
+        </footer>
+      </div>
+    ) : (
       <div
         style={{
-          fontSize: isMobile ? "11.5px" : "12.5px",
-          color: "#475569",
-          lineHeight: "1.45",
-          fontWeight: "650",
-          wordBreak: "keep-all",
+          position: "relative",
+          zIndex: 2,
+          width: "min(1120px, calc(100% - 80px))",
+          height: "100%",
+          margin: "0 auto",
+          display: "grid",
+          gridTemplateColumns: "1.05fr 0.95fr",
+          alignItems: "center",
+          gap: "54px",
+          boxSizing: "border-box",
+          padding: "38px 0 34px",
         }}
       >
-        단차, 경사, 장애물을 확인하고
-        <br />
-        더 편한 경로를 찾아요.
+        <section
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-start",
+            justifyContent: "center",
+            minWidth: 0,
+          }}
+        >
+          <div
+            style={{
+              transform: "scale(0.72)",
+              transformOrigin: "left center",
+              marginLeft: "-32px",
+              marginTop: "-96px",
+              marginBottom: "-112px",
+              filter: "drop-shadow(0 12px 22px rgba(30, 80, 120, 0.14))",
+            }}
+          >
+            <SimpleTextLogo />
+          </div>
+
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "8px 14px",
+              borderRadius: "999px",
+              background: "rgba(255,255,255,0.7)",
+              border: "1px solid rgba(255,255,255,0.9)",
+              boxShadow: "0 10px 24px rgba(72, 117, 92, 0.10)",
+              color: "#1976D2",
+              fontSize: "14px",
+              fontWeight: "900",
+              backdropFilter: "blur(10px)",
+              marginBottom: "18px",
+            }}
+          >
+            모든 길은 모두를 위해
+          </div>
+
+          <h1
+            style={{
+              margin: 0,
+              color: "#173B69",
+              fontSize: "42px",
+              lineHeight: 1.18,
+              letterSpacing: "-1.6px",
+              fontWeight: "950",
+              textAlign: "left",
+              textShadow: "0 2px 0 rgba(255,255,255,0.35)",
+            }}
+          >
+            함께 만드는
+            <br />
+            우리 동네 바퀴지도
+          </h1>
+
+          <p
+            style={{
+              margin: "18px 0 0",
+              color: "#334155",
+              fontSize: "17px",
+              lineHeight: 1.7,
+              fontWeight: "700",
+              wordBreak: "keep-all",
+              maxWidth: "540px",
+            }}
+          >
+            우리 동네의 단차, 경사, 보도 위 불편 요소를 함께 모아
+            바퀴로 이동하는 누구나 더 편한 길을 찾을 수 있도록 돕습니다.
+          </p>
+        </section>
+
+        <section
+          style={{
+            justifySelf: "end",
+            width: "440px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "14px",
+            padding: "24px",
+            borderRadius: "34px",
+            background: "rgba(255,255,255,0.48)",
+            border: "1px solid rgba(255,255,255,0.78)",
+            boxShadow:
+              "0 24px 60px rgba(30, 64, 175, 0.12), inset 0 0 0 1px rgba(255,255,255,0.32)",
+            backdropFilter: "blur(14px)",
+          }}
+        >
+          <button
+            type="button"
+            onClick={openOpinionSurvey}
+            style={{
+              width: "100%",
+              padding: "11px 13px",
+              borderRadius: "18px",
+              boxSizing: "border-box",
+              border: "1px solid #FED7AA",
+              background: "rgba(255, 247, 237, 0.96)",
+              boxShadow: "0 8px 20px rgba(154, 52, 18, 0.10)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "12px",
+              cursor: "pointer",
+              textAlign: "left",
+            }}
+          >
+            <div
+              style={{
+                minWidth: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+              }}
+            >
+              <span
+                style={{
+                  flexShrink: 0,
+                  fontSize: "22px",
+                }}
+              >
+                {SURVEY_COUNT < SURVEY_LIMIT ? "☕" : "💬"}
+              </span>
+
+              <div style={{ minWidth: 0 }}>
+                <div
+                  style={{
+                    color: "#9A3412",
+                    fontSize: "14px",
+                    fontWeight: "900",
+                    lineHeight: 1.3,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {SURVEY_COUNT < SURVEY_LIMIT
+                    ? "1분 설문 · 커피 쿠폰"
+                    : "1분 의견 설문"}
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "2px",
+                    color: "#78716C",
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    lineHeight: 1.3,
+                  }}
+                >
+                  휠더월드에 의견을 들려주세요
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              {SURVEY_COUNT < SURVEY_LIMIT && (
+                <span
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: "999px",
+                    background: "white",
+                    color: "#EA580C",
+                    fontSize: "10px",
+                    fontWeight: "900",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  현재 참여 {SURVEY_COUNT}/{SURVEY_LIMIT}
+                </span>
+              )}
+
+              <span
+                style={{
+                  color: "#C2410C",
+                  fontSize: "20px",
+                  fontWeight: "900",
+                }}
+              >
+                ›
+              </span>
+            </div>
+          </button>
+
+          <div
+            style={{
+              color: "#0F172A",
+              fontSize: "24px",
+              fontWeight: "950",
+              letterSpacing: "-0.8px",
+              textAlign: "left",
+              margin: "2px 0 2px",
+            }}
+          >
+            필요한 기능을 선택해 주세요
+          </div>
+
+          <button
+            onClick={openSearchView}
+            style={{
+              width: "100%",
+              border: "none",
+              borderRadius: "28px",
+              padding: "22px 22px",
+              background:
+                "linear-gradient(145deg, rgba(255,255,255,0.98), rgba(219,234,254,0.98))",
+              boxShadow:
+                "0 10px 0 rgba(147,197,253,0.52), 0 22px 38px rgba(30,64,175,0.16)",
+              cursor: "pointer",
+              transition: "all 0.18s ease",
+              textAlign: "left",
+              display: "flex",
+              alignItems: "center",
+              gap: "16px",
+              position: "relative",
+              overflow: "hidden",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translateY(-3px)";
+              e.currentTarget.style.boxShadow =
+                "0 13px 0 rgba(147,197,253,0.52), 0 26px 42px rgba(30,64,175,0.2)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translateY(0px)";
+              e.currentTarget.style.boxShadow =
+                "0 10px 0 rgba(147,197,253,0.52), 0 22px 38px rgba(30,64,175,0.16)";
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: "-35px",
+                right: "-32px",
+                width: "118px",
+                height: "118px",
+                borderRadius: "50%",
+                background: "rgba(147,197,253,0.25)",
+              }}
+            />
+
+            <div
+              style={{
+                width: "64px",
+                height: "64px",
+                borderRadius: "24px",
+                background: "linear-gradient(135deg, #60A5FA, #2563EB)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "31px",
+                flexShrink: 0,
+                boxShadow:
+                  "inset 0 0 0 2px rgba(255,255,255,0.45), 0 10px 18px rgba(37,99,235,0.25)",
+                position: "relative",
+                zIndex: 1,
+              }}
+            >
+              🗺️
+            </div>
+
+            <div style={{ position: "relative", zIndex: 1, flex: 1 }}>
+              <div
+                style={{
+                  display: "inline-block",
+                  background: "rgba(219,234,254,0.95)",
+                  color: "#1D4ED8",
+                  fontSize: "11px",
+                  fontWeight: "900",
+                  padding: "5px 10px",
+                  borderRadius: "999px",
+                  marginBottom: "8px",
+                }}
+              >
+                바퀴가 편한 길 찾기
+              </div>
+
+              <div
+                style={{
+                  fontSize: "25px",
+                  fontWeight: "950",
+                  color: "#1E3A8A",
+                  marginBottom: "6px",
+                  letterSpacing: "-0.7px",
+                }}
+              >
+                안전 길찾기
+              </div>
+
+              <div
+                style={{
+                  fontSize: "13px",
+                  color: "#475569",
+                  lineHeight: "1.5",
+                  fontWeight: "700",
+                  wordBreak: "keep-all",
+                }}
+              >
+                단차, 경사, 장애물을 확인하고
+                <br />
+                더 편한 경로를 찾아요.
+              </div>
+            </div>
+
+            <div
+              style={{
+                position: "relative",
+                zIndex: 1,
+                width: "34px",
+                height: "34px",
+                borderRadius: "50%",
+                background: "rgba(255,255,255,0.95)",
+                color: "#2563EB",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "22px",
+                fontWeight: "900",
+                flexShrink: 0,
+                boxShadow: "0 4px 10px rgba(37,99,235,0.18)",
+              }}
+            >
+              ›
+            </div>
+          </button>
+
+          <button
+            onClick={openCreateView}
+            style={{
+              width: "100%",
+              border: "none",
+              borderRadius: "28px",
+              padding: "22px 22px",
+              background:
+                "linear-gradient(145deg, rgba(255,255,255,0.98), rgba(209,250,229,0.98))",
+              boxShadow:
+                "0 10px 0 rgba(110,231,183,0.52), 0 22px 38px rgba(6,95,70,0.14)",
+              cursor: "pointer",
+              transition: "all 0.18s ease",
+              textAlign: "left",
+              display: "flex",
+              alignItems: "center",
+              gap: "16px",
+              position: "relative",
+              overflow: "hidden",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translateY(-3px)";
+              e.currentTarget.style.boxShadow =
+                "0 13px 0 rgba(110,231,183,0.52), 0 26px 42px rgba(6,95,70,0.18)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translateY(0px)";
+              e.currentTarget.style.boxShadow =
+                "0 10px 0 rgba(110,231,183,0.52), 0 22px 38px rgba(6,95,70,0.14)";
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: "-35px",
+                right: "-32px",
+                width: "118px",
+                height: "118px",
+                borderRadius: "50%",
+                background: "rgba(110,231,183,0.25)",
+              }}
+            />
+
+            <div
+              style={{
+                width: "64px",
+                height: "64px",
+                borderRadius: "24px",
+                background: "linear-gradient(135deg, #34D399, #059669)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "31px",
+                flexShrink: 0,
+                boxShadow:
+                  "inset 0 0 0 2px rgba(255,255,255,0.45), 0 10px 18px rgba(5,150,105,0.22)",
+                position: "relative",
+                zIndex: 1,
+              }}
+            >
+              ✍️
+            </div>
+
+            <div style={{ position: "relative", zIndex: 1, flex: 1 }}>
+              <div
+                style={{
+                  display: "inline-block",
+                  background: "rgba(209,250,229,0.95)",
+                  color: "#047857",
+                  fontSize: "11px",
+                  fontWeight: "900",
+                  padding: "5px 10px",
+                  borderRadius: "999px",
+                  marginBottom: "8px",
+                }}
+              >
+                우리 동네 길 정보 모으기
+              </div>
+
+              <div
+                style={{
+                  fontSize: "25px",
+                  fontWeight: "950",
+                  color: "#065F46",
+                  marginBottom: "6px",
+                  letterSpacing: "-0.7px",
+                }}
+              >
+                주민 제보
+              </div>
+
+              <div
+                style={{
+                  fontSize: "13px",
+                  color: "#475569",
+                  lineHeight: "1.5",
+                  fontWeight: "700",
+                  wordBreak: "keep-all",
+                }}
+              >
+                턱, 계단, 보도 파손을
+                <br />
+                지도에 직접 남겨요.
+              </div>
+            </div>
+
+            <div
+              style={{
+                position: "relative",
+                zIndex: 1,
+                width: "34px",
+                height: "34px",
+                borderRadius: "50%",
+                background: "rgba(255,255,255,0.95)",
+                color: "#059669",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "22px",
+                fontWeight: "900",
+                flexShrink: 0,
+                boxShadow: "0 4px 10px rgba(5,150,105,0.16)",
+              }}
+            >
+              ›
+            </div>
+          </button>
+        </section>
+
+        <footer
+          onClick={handleSecretDoorClick}
+          style={{
+            position: "absolute",
+            left: "50%",
+            bottom: "16px",
+            transform: "translateX(-50%)",
+            fontSize: "11px",
+            color: "rgba(31,41,55,0.42)",
+            cursor: "pointer",
+            userSelect: "none",
+            background: "rgba(255,255,255,0.42)",
+            padding: "6px 12px",
+            borderRadius: "999px",
+            backdropFilter: "blur(6px)",
+          }}
+        >
+          © 2026 Wheel the World.
+        </footer>
       </div>
-    </div>
-
-    <div
-      style={{
-        position: "relative",
-        zIndex: 1,
-        width: "28px",
-height: "28px",
-fontSize: "18px",
-        borderRadius: "50%",
-        background: "rgba(255,255,255,0.95)",
-        color: "#2563EB",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-       
-        fontWeight: "900",
-        boxShadow: "0 4px 10px rgba(37,99,235,0.18)",
-        flexShrink: 0,
-      }}
-    >
-      ›
-    </div>
-  </button>
-
-  <button
-    onClick={openCreateView}
-    style={{
-      width: "100%",
-      border: "none",
-      borderRadius: "24px",
-padding: isMobile ? "12px 14px" : "16px 18px",
-gap: "12px",
-      background:
-        "linear-gradient(145deg, rgba(255,255,255,0.96), rgba(209,250,229,0.96))",
-      boxShadow:
-        "0 10px 0 rgba(110,231,183,0.5), 0 18px 34px rgba(6,95,70,0.14)",
-      cursor: "pointer",
-      transition: "all 0.18s ease",
-      textAlign: "left",
-      display: "flex",
-      alignItems: "center",
-     
-      position: "relative",
-      overflow: "hidden",
-    }}
-    onMouseEnter={(e) => {
-      e.currentTarget.style.transform = "translateY(-3px)";
-      e.currentTarget.style.boxShadow =
-        "0 13px 0 rgba(110,231,183,0.5), 0 22px 38px rgba(6,95,70,0.18)";
-    }}
-    onMouseLeave={(e) => {
-      e.currentTarget.style.transform = "translateY(0px)";
-      e.currentTarget.style.boxShadow =
-        "0 10px 0 rgba(110,231,183,0.5), 0 18px 34px rgba(6,95,70,0.14)";
-    }}
-  >
-    <div
-      style={{
-        position: "absolute",
-        top: "-35px",
-        right: "-32px",
-        width: "105px",
-        height: "105px",
-        borderRadius: "50%",
-        background: "rgba(110,231,183,0.25)",
-      }}
-    />
-
-    <div
-      style={{
-        position: "absolute",
-        bottom: "-24px",
-        left: "35%",
-        width: "120px",
-        height: "48px",
-        borderRadius: "50%",
-        background: "rgba(255,255,255,0.45)",
-      }}
-    />
-
-    <div
-      style={{
-        width: isMobile ? "46px" : "54px",
-height: isMobile ? "46px" : "54px",
-borderRadius: "18px",
-fontSize: isMobile ? "23px" : "27px",
-        background: "linear-gradient(135deg, #34D399, #059669)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-       
-        flexShrink: 0,
-        boxShadow:
-          "inset 0 0 0 2px rgba(255,255,255,0.45), 0 8px 16px rgba(5,150,105,0.22)",
-        position: "relative",
-        zIndex: 1,
-      }}
-    >
-      ✍️
-    </div>
-
-    <div style={{ position: "relative", zIndex: 1, flex: 1 }}>
-      <div
-        style={{
-          display: "inline-block",
-          background: "rgba(209,250,229,0.95)",
-          color: "#047857",
-          fontSize: "10.5px",
-          fontWeight: "900",
-          padding: "4px 9px",
-          borderRadius: "999px",
-          marginBottom: "7px",
-          letterSpacing: "-0.2px",
-        }}
-      >
-        우리 동네 길 정보 모으기
-      </div>
-
-      <div
-        style={{
-          fontSize: isMobile ? "17px" : "19px",
-          fontWeight: "950",
-          color: "#065F46",
-          marginBottom: "5px",
-          letterSpacing: "-0.5px",
-        }}
-      >
-        주민 제보
-      </div>
-
-      <div
-        style={{
-          fontSize: isMobile ? "11.5px" : "12.5px",
-          color: "#475569",
-          lineHeight: "1.45",
-          fontWeight: "650",
-          wordBreak: "keep-all",
-        }}
-      >
-        턱, 계단, 보도 파손을
-        <br />
-        지도에 직접 남겨요.
-      </div>
-    </div>
-
-    <div
-      style={{
-        position: "relative",
-        zIndex: 1,
-       width: "28px",
-height: "28px",
-fontSize: "18px",
-        borderRadius: "50%",
-        background: "rgba(255,255,255,0.95)",
-        color: "#059669",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        
-        fontWeight: "900",
-        boxShadow: "0 4px 10px rgba(5,150,105,0.16)",
-        flexShrink: 0,
-      }}
-    >
-      ›
-    </div>
-  </button>
-</div>
-
-      <footer
-        onClick={handleSecretDoorClick}
-        style={{
-          marginTop: isMobile ? "12px" : "18px",
-          fontSize: "11px",
-          color: "rgba(31,41,55,0.42)",
-          cursor: "pointer",
-          userSelect: "none",
-          background: "rgba(255,255,255,0.38)",
-          padding: "6px 12px",
-          borderRadius: "999px",
-          backdropFilter: "blur(6px)",
-        }}
-      >
-        © 2026 Wheel the World.
-      </footer>
-    </div>
+    )}
   </div>
 )}
 
