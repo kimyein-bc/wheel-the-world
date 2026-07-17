@@ -5557,23 +5557,23 @@ return (
 
     {isMobile ? (
       <div
-        style={{
-          position: "relative",
-          zIndex: 2,
-          width: "100%",
-          height: "100%",
-          maxWidth: "370px",
-          margin: "0 auto",
-          padding: "18px 18px 18px",
-          boxSizing: "border-box",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          textAlign: "center",
-          transform: "translateY(-42px)",
-        }}
-      >
+  style={{
+    position: "relative",
+    zIndex: 2,
+    width: "100%",
+    height: "100%",
+    maxWidth: "370px",
+    margin: "0 auto",
+    padding: "18px 18px 78px",
+    boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    textAlign: "center",
+    transform: "translateY(-54px)",
+  }}
+>
         <div
           style={{
             transform: "scale(0.64)",
