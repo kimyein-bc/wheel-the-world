@@ -749,7 +749,12 @@ const validMarkers = markerSource
   const isPuddleMarker = m.type === "puddle";
 
   const markerBgColor = isPuddleMarker ? "#0EA5E9" : "#FFFFFF";
-  const markerBorderColor = isPuddleMarker ? "#0284C7" : info.color;
+  const markerBorderColor =
+  Number(m?.wheelLevel) === 2
+    ? "#DC2626"
+    : Number(m?.wheelLevel) === 1
+    ? "#F59E0B"
+    : "#94A3B8";
   const markerShadow = isPuddleMarker
     ? "0 6px 16px rgba(14, 165, 233, 0.45)"
     : "0 4px 12px rgba(15, 23, 42, 0.18)";
@@ -767,7 +772,7 @@ const validMarkers = markerSource
     borderRadius: "50%",
 
     background: markerBgColor,
-    color: isPuddleMarker ? "#FFFFFF" : markerBorderColor,
+    color: isPuddleMarker ? "#FFFFFF" : "#334155",
     fontSize: isPuddleMarker ? "22px" : "18px",
     fontWeight: "900",
 
@@ -1505,12 +1510,14 @@ const validMarkers = markerSource
   const isPuddleMarker = m.type === "puddle";
 
   const markerBgColor = isPuddleMarker ? "#0EA5E9" : "#FFFFFF";
-  const markerTextColor = isPuddleMarker ? "#FFFFFF" : "#111827";
-  const markerBorderColor = isPuddleMarker
-    ? "#0284C7"
-    : isApproved
-    ? info.color
-    : "#999";
+  const markerTextColor = isPuddleMarker ? "#FFFFFF" : "#334155";
+  const markerBorderColor = !isApproved
+  ? "#94A3B8"
+  : Number(m?.wheelLevel) === 2
+  ? "#DC2626"
+  : Number(m?.wheelLevel) === 1
+  ? "#F59E0B"
+  : "#94A3B8";
   const markerBorderStyle = isApproved ? "solid" : "dashed";
   const markerShadow = isPuddleMarker
     ? "0 6px 16px rgba(14, 165, 233, 0.45)"
@@ -5141,6 +5148,30 @@ const renderMarkerTypeFilter = () => {
   const visibleCount = totalCount - hiddenMarkerTypes.length;
   const isAllVisible = hiddenMarkerTypes.length === 0;
 
+  const getFilterButtonStyle = (isVisible) => ({
+    width: "100%",
+    minHeight: "38px",
+    padding: "8px 10px",
+    borderRadius: "12px",
+    border: isVisible ? "1.5px solid #93C5FD" : "1.5px solid #E2E8F0",
+    background: isVisible ? "#EFF6FF" : "#F8FAFC",
+    color: isVisible ? "#1D4ED8" : "#64748B",
+    fontSize: "12px",
+    fontWeight: "900",
+    fontFamily: "inherit",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "5px",
+    lineHeight: 1.25,
+    wordBreak: "keep-all",
+    opacity: isVisible ? 1 : 0.7,
+    boxShadow: isVisible
+      ? "0 4px 10px rgba(37, 99, 235, 0.10)"
+      : "none",
+  });
+
   return (
     <div
       style={{
@@ -5155,40 +5186,42 @@ const renderMarkerTypeFilter = () => {
         type="button"
         onClick={() => setIsMarkerFilterOpen((prev) => !prev)}
         style={{
-  position: "absolute",
-  left: "8px",
-  zIndex: 10,
+          position: "absolute",
+          left: "8px",
+          zIndex: 10,
 
-  height: "34px",
-  padding: "0 11px",
+          height: "34px",
+          padding: "0 12px",
 
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: "5px",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "6px",
 
-  border: "1px solid #9197A3",
-  borderRadius: "3px",
-  background: "#FFFFFF",
-  color: "#222222",
+          border: "1px solid #CBD5E1",
+          borderRadius: "999px",
+          background: "#FFFFFF",
+          color: "#334155",
 
-  fontSize: "11px",
-  fontWeight: "800",
-  fontFamily: "inherit",
-  whiteSpace: "nowrap",
+          fontSize: "11px",
+          fontWeight: "900",
+          fontFamily: "inherit",
+          whiteSpace: "nowrap",
 
-  boxShadow: "0 1px 2px rgba(0,0,0,0.18)",
-  cursor: "pointer",
-  transform: "translateY(-8px)",
-}}
+          boxShadow: "0 4px 10px rgba(15, 23, 42, 0.12)",
+          cursor: "pointer",
+          transform: "translateY(-8px)",
+        }}
       >
         <span>표시</span>
         <span
           style={{
-            background: "rgba(255,255,255,0.18)",
+            background: "#EFF6FF",
+            color: "#2563EB",
             borderRadius: "999px",
             padding: "2px 7px",
             fontSize: "11px",
+            fontWeight: "900",
           }}
         >
           {visibleCount}/{totalCount}
@@ -5226,6 +5259,7 @@ const renderMarkerTypeFilter = () => {
               >
                 표시할 아이콘
               </div>
+
               <div
                 style={{
                   fontSize: "11px",
@@ -5258,54 +5292,36 @@ const renderMarkerTypeFilter = () => {
           </div>
 
           <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "7px",
-              maxHeight: "190px",
-              overflowY: "auto",
-              paddingRight: "2px",
-            }}
-          >
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "7px",
+    maxHeight: "none",
+    overflowY: "visible",
+    paddingRight: 0,
+  }}
+>
             {typeEntries.map(([type, info]) => {
-  const isVisible = !hiddenMarkerTypes.includes(type);
+              const isVisible = !hiddenMarkerTypes.includes(type);
 
-  const iconText = info.icon || "";
-  const labelText = String(info.label || type)
-    .split(iconText)
-    .join("")
-    .trim();
+              const iconText = info.icon || "";
+              const labelText = String(info.label || type)
+                .split(iconText)
+                .join("")
+                .trim();
 
-  return (
-    <button
-      key={type}
-      type="button"
-      onClick={() => toggleMarkerTypeVisibility(type)}
-      style={{
-        border: isVisible
-          ? `1.5px solid ${info.color || "#2563EB"}`
-          : "1.5px solid #E2E8F0",
-        background: isVisible
-          ? `${info.color || "#2563EB"}`
-          : "#F8FAFC",
-        color: isVisible ? "white" : "#64748B",
-        borderRadius: "13px",
-        padding: "9px 8px",
-        fontSize: "12px",
-        fontWeight: "900",
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "5px",
-        opacity: isVisible ? 1 : 0.72,
-      }}
-    >
-      <span>{iconText}</span>
-      <span>{labelText}</span>
-    </button>
-  );
-})}
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => toggleMarkerTypeVisibility(type)}
+                  style={getFilterButtonStyle(isVisible)}
+                >
+                  <span>{iconText}</span>
+                  <span>{labelText}</span>
+                </button>
+              );
+            })}
           </div>
 
           <div
@@ -5321,13 +5337,15 @@ const renderMarkerTypeFilter = () => {
               disabled={isAllVisible}
               style={{
                 flex: 1,
-                border: "none",
+                minHeight: "36px",
+                border: "1px solid #BFDBFE",
                 borderRadius: "12px",
                 padding: "9px 10px",
-                background: isAllVisible ? "#E2E8F0" : "#DBEAFE",
-                color: isAllVisible ? "#94A3B8" : "#1D4ED8",
+                background: isAllVisible ? "#F1F5F9" : "#EFF6FF",
+                color: isAllVisible ? "#94A3B8" : "#2563EB",
                 fontSize: "12px",
                 fontWeight: "900",
+                fontFamily: "inherit",
                 cursor: isAllVisible ? "default" : "pointer",
               }}
             >
@@ -5336,16 +5354,20 @@ const renderMarkerTypeFilter = () => {
 
             <button
               type="button"
-              onClick={() => setHiddenMarkerTypes(typeEntries.map(([type]) => type))}
+              onClick={() =>
+                setHiddenMarkerTypes(typeEntries.map(([type]) => type))
+              }
               style={{
                 flex: 1,
-                border: "none",
+                minHeight: "36px",
+                border: "1px solid #FECACA",
                 borderRadius: "12px",
                 padding: "9px 10px",
-                background: "#FEE2E2",
-                color: "#B91C1C",
+                background: "#FEF2F2",
+                color: "#DC2626",
                 fontSize: "12px",
                 fontWeight: "900",
+                fontFamily: "inherit",
                 cursor: "pointer",
               }}
             >
@@ -6447,12 +6469,27 @@ return (
 
       {/* 2. 안전 길찾기 화면 */}
       {currentView === "search" && (
-        <div style={{ 
-          width: "100%", 
-          maxWidth: "850px",      
-          flex: 1   
-                        
-        }}>
+  <div
+    style={{
+      position: isMobile ? "relative" : "fixed",
+      top: isMobile ? "auto" : 0,
+      left: isMobile ? "auto" : 0,
+      right: isMobile ? "auto" : 0,
+      bottom: isMobile ? "auto" : 0,
+
+      width: isMobile ? "100%" : "100vw",
+      maxWidth: isMobile ? "850px" : "none",
+      height: isMobile ? "auto" : "100vh",
+
+      flex: 1,
+      margin: 0,
+      padding: 0,
+      boxSizing: "border-box",
+      overflow: isMobile ? "visible" : "hidden",
+      background: isMobile ? "transparent" : "#F8FAFC",
+      zIndex: isMobile ? "auto" : 50,
+    }}
+  >
           {renderHeader()}
           
           <div
@@ -6461,22 +6498,33 @@ return (
     flexDirection: isMobile ? "column" : "row",
     height: "calc(100vh - 60px)",
     width: "100%",
-    marginTop: "60px"
+    marginTop: "60px",
+    overflow: isMobile ? "visible" : "hidden",
+    background: isMobile ? "transparent" : "#F8FAFC",
   }}
 >
                  
             {/* 왼쪽 사이드바 영역 */}
-            <div style={{ 
-              width: isMobile ? "100%" : "320px",
-              height: isMobile ? "auto" : "100%",
-              background: "#ffffff", 
-              borderRight: "1px solid #EAEAEA", 
-              padding: isMobile ? "7px 14px 5px" : "20px 16px", 
-              overflowY: isMobile ? "visible" : "auto",
-              display: "flex", 
-              flexDirection: "column", 
-              gap: "8px" 
-            }}>
+            <div
+  style={{
+    width: isMobile ? "100%" : "390px",
+    height: isMobile ? "auto" : "100%",
+    flexShrink: isMobile ? 1 : 0,
+    background: "#ffffff",
+    borderRight: isMobile
+      ? "1px solid #EAEAEA"
+      : "1px solid #E2E8F0",
+    padding: isMobile ? "7px 14px 5px" : "28px 24px",
+    overflowY: isMobile ? "visible" : "auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: isMobile ? "8px" : "12px",
+    boxSizing: isMobile ? "content-box" : "border-box",
+    boxShadow: isMobile
+      ? "none"
+      : "8px 0 24px rgba(15, 23, 42, 0.04)",
+  }}
+>
               {!isMobile && (
                 <h3
                   style={{
@@ -6936,8 +6984,10 @@ background: isSelected ? "#2563EB" : "transparent",
   style={{
     flex: 1,
     minHeight: 0,
+    minWidth: isMobile ? "auto" : 0,
     position: "relative",
     height: isMobile ? "auto" : "100%",
+    overflow: isMobile ? "visible" : "hidden",
   }}
 >
               
@@ -7411,12 +7461,24 @@ weatherInfo={weatherInfo}
 {currentView === "create" && (
   <div
     style={{
-      height: "100vh",
+      position: isMobile ? "relative" : "fixed",
+      top: isMobile ? "auto" : 0,
+      left: isMobile ? "auto" : 0,
+      right: isMobile ? "auto" : 0,
+      bottom: isMobile ? "auto" : 0,
+
+      height: isMobile ? "100vh" : "100vh",
       display: "flex",
       flexDirection: "column",
-      width: "100%",
-      padding: isMobile ? "0" : "20px",
+      width: isMobile ? "100%" : "100vw",
+      maxWidth: "none",
+
+      padding: isMobile ? "0" : 0,
+      margin: 0,
       boxSizing: "border-box",
+      overflow: isMobile ? "visible" : "hidden",
+      background: isMobile ? "transparent" : "#F8FAFC",
+      zIndex: isMobile ? "auto" : 50,
     }}
   >
     <div
@@ -7435,17 +7497,28 @@ weatherInfo={weatherInfo}
     flexDirection: isMobile ? "column" : "row",
     marginTop: "60px",
     minHeight: 0,
+    width: "100%",
+    height: isMobile ? "auto" : "calc(100vh - 60px)",
+    overflow: isMobile ? "visible" : "hidden",
+    background: isMobile ? "transparent" : "#F8FAFC",
   }}
 >
       {/* 제보 패널 */}
       <div
   style={{
-    width: isMobile ? "100%" : "320px",
-    padding: isMobile ? "10px 16px 12px" : "20px",
-    background: "#f9f9f9",
+    width: isMobile ? "100%" : "390px",
+    height: isMobile ? "auto" : "100%",
+    flexShrink: isMobile ? 1 : 0,
+    padding: isMobile ? "10px 16px 12px" : "28px 24px",
+    background: isMobile ? "#f9f9f9" : "#FFFFFF",
+    borderRight: isMobile ? "none" : "1px solid #E2E8F0",
     overflowY: isMobile ? "visible" : "auto",
     position: "relative",
     zIndex: 3000,
+    boxSizing: isMobile ? "content-box" : "border-box",
+    boxShadow: isMobile
+      ? "none"
+      : "8px 0 24px rgba(15, 23, 42, 0.04)",
   }}
 >
         
@@ -7661,7 +7734,16 @@ weatherInfo={weatherInfo}
       </div>
 
       {/* 지도 영역 */}
-      <div style={{ flex: 1, position: "relative" }}>
+      <div
+  style={{
+    flex: 1,
+    position: "relative",
+    minWidth: isMobile ? "auto" : 0,
+    minHeight: isMobile ? "auto" : 0,
+    height: isMobile ? "auto" : "100%",
+    overflow: isMobile ? "visible" : "hidden",
+  }}
+>
         
 
        {!isBfMarkersLoaded ? (
