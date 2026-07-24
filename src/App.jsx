@@ -4372,7 +4372,8 @@ setRouteInfo({
 }
 
     // 🔥 4. 지도 경로 저장
-    setRouteSteps(route);
+    resetVoiceGuide();
+setRouteSteps(route);
 
 stopLiveLocationTracking();
 setIsNavigationActive(false);
@@ -4634,6 +4635,7 @@ const stopNavigation = () => {
   setDistanceToDestination(null);
 };
 const finishNavigationAndOpenFeedback = () => {
+  voiceSpeak("안내를 종료합니다.", { force: true });
   stopNavigation();
 
   setNavigationFeedbackRating(0);
@@ -4754,6 +4756,15 @@ const startLiveLocationTracking = async ({
     }
 
     setUserLocation([displayLocation.lat, displayLocation.lng]);
+    if (navigationMode && route && route.length > 1) {
+  announceVoiceNavigation({
+    currentPosition: displayLocation,
+    route,
+    destination,
+    markers: bfMarkers,
+  });
+}
+    
 
 // 안내 중이면서 followMap이 켜진 경우에만
 // 지도 화면이 계속 사용자를 따라가게 함
@@ -4816,11 +4827,12 @@ if (shouldMoveMap && mapRef.current) {
   };
 
   const handleError = (error) => {
-    console.error("실시간 위치 추적 오류:", error);
-    alert("현재 위치를 계속 추적할 수 없습니다. 위치 권한을 확인해 주세요.");
-    stopLiveLocationTracking();
-    setIsNavigationActive(false);
-  };
+  console.error("실시간 위치 추적 오류:", error);
+  alert("현재 위치를 계속 추적할 수 없습니다. 위치 권한을 확인해 주세요.");
+  stopLiveLocationTracking();
+  resetVoiceGuide();
+  setIsNavigationActive(false);
+};
 
   liveLocationWatchRef.current = navigator.geolocation.watchPosition(
     handlePosition,
@@ -5139,6 +5151,338 @@ useEffect(() => {
     delete window.migrateWheelWorldImages;
   };
 }, [isAdminLoggedIn]);
+const voiceGuideRef = useRef({
+  lastText: "",
+  lastSpokenAt: 0,
+  spokenTurnKeys: new Set(),
+  spokenHazardIds: new Set(),
+  arrived: false,
+});
+
+const voiceToRoutePoint = (point) => {
+  if (!point) return null;
+
+  if (Array.isArray(point)) {
+    const lat = Number(point[0]);
+    const lng = Number(point[1]);
+
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+
+    return { lat, lng };
+  }
+
+  const lat = Number(point.lat);
+  const lng = Number(point.lng);
+
+  if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+
+  return { lat, lng };
+};
+
+const voiceDistanceMeters = (a, b) => {
+  const pointA = voiceToRoutePoint(a);
+  const pointB = voiceToRoutePoint(b);
+
+  if (!pointA || !pointB) return Infinity;
+
+  const earthRadius = 6371000;
+
+  const lat1 = (pointA.lat * Math.PI) / 180;
+  const lat2 = (pointB.lat * Math.PI) / 180;
+  const deltaLat = ((pointB.lat - pointA.lat) * Math.PI) / 180;
+  const deltaLng = ((pointB.lng - pointA.lng) * Math.PI) / 180;
+
+  const value =
+    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+    Math.cos(lat1) *
+      Math.cos(lat2) *
+      Math.sin(deltaLng / 2) *
+      Math.sin(deltaLng / 2);
+
+  return earthRadius * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+};
+
+const voiceBearingDegrees = (from, to) => {
+  const a = voiceToRoutePoint(from);
+  const b = voiceToRoutePoint(to);
+
+  if (!a || !b) return 0;
+
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const deltaLng = ((b.lng - a.lng) * Math.PI) / 180;
+
+  const y = Math.sin(deltaLng) * Math.cos(lat2);
+  const x =
+    Math.cos(lat1) * Math.sin(lat2) -
+    Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLng);
+
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+};
+
+const voiceAngleDifference = (fromAngle, toAngle) => {
+  return ((toAngle - fromAngle + 540) % 360) - 180;
+};
+
+const voiceClosestRouteIndex = (currentPosition, route = []) => {
+  if (!currentPosition || !route || route.length === 0) {
+    return {
+      index: -1,
+      distance: Infinity,
+    };
+  }
+
+  let closestIndex = -1;
+  let closestDistance = Infinity;
+
+  route.forEach((point, index) => {
+    const distance = voiceDistanceMeters(currentPosition, point);
+
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestIndex = index;
+    }
+  });
+
+  return {
+    index: closestIndex,
+    distance: closestDistance,
+  };
+};
+
+const voiceFindUpcomingTurn = (currentPosition, route = []) => {
+  if (!currentPosition || !route || route.length < 8) return null;
+
+  const { index: closestIndex } = voiceClosestRouteIndex(
+    currentPosition,
+    route
+  );
+
+  if (closestIndex < 0) return null;
+
+  const startIndex = Math.max(closestIndex + 2, 3);
+  const endIndex = Math.min(route.length - 4, closestIndex + 45);
+
+  for (let i = startIndex; i <= endIndex; i += 1) {
+    const before = route[i - 3];
+    const center = route[i];
+    const after = route[i + 3];
+
+    if (!before || !center || !after) continue;
+
+    const beforeBearing = voiceBearingDegrees(before, center);
+    const afterBearing = voiceBearingDegrees(center, after);
+    const angleDiff = voiceAngleDifference(beforeBearing, afterBearing);
+    const absAngle = Math.abs(angleDiff);
+
+    if (absAngle < 35) continue;
+
+    const distanceToTurn = voiceDistanceMeters(currentPosition, center);
+
+    if (distanceToTurn > 120) continue;
+
+    return {
+      index: i,
+      distance: distanceToTurn,
+      direction: angleDiff > 0 ? "오른쪽" : "왼쪽",
+      angle: absAngle,
+    };
+  }
+
+  return null;
+};
+
+const voiceMarkerLabel = (marker) => {
+  const config = bfConfig?.[marker?.type];
+
+  if (!config) return "장애물";
+
+  const icon = config.icon || "";
+  const label = String(config.label || "장애물")
+    .split(icon)
+    .join("")
+    .trim();
+
+  return label || "장애물";
+};
+
+const voiceFindNearbyHazard = (currentPosition, markers = []) => {
+  if (!currentPosition || !Array.isArray(markers)) return null;
+
+  const approvedMarkers = markers.filter(
+    (marker) =>
+      marker.status === "approved" ||
+      marker.isOfficial === true
+  );
+
+  const candidates = approvedMarkers
+    .map((marker) => {
+      const distance = voiceDistanceMeters(currentPosition, marker);
+      const level = Number(marker.wheelLevel || 0);
+
+      return {
+        marker,
+        distance,
+        level,
+      };
+    })
+    .filter(({ distance, level }) => {
+      if (level === 2) return distance <= 40;
+      if (level === 1) return distance <= 25;
+      return false;
+    })
+    .sort((a, b) => {
+      if (b.level !== a.level) return b.level - a.level;
+      return a.distance - b.distance;
+    });
+
+  return candidates[0] || null;
+};
+
+const voiceSpeak = (text, options = {}) => {
+  const { force = false } = options;
+
+  if (!text) return;
+
+  if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) {
+    console.warn("이 브라우저는 음성 안내를 지원하지 않습니다.");
+    return;
+  }
+
+  const now = Date.now();
+  const lastText = voiceGuideRef.current.lastText;
+  const lastSpokenAt = voiceGuideRef.current.lastSpokenAt;
+
+  if (!force && lastText === text && now - lastSpokenAt < 12000) {
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "ko-KR";
+  utterance.rate = 0.92;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+
+  window.speechSynthesis.speak(utterance);
+
+  voiceGuideRef.current.lastText = text;
+  voiceGuideRef.current.lastSpokenAt = now;
+};
+
+const resetVoiceGuide = () => {
+  if (window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+  }
+
+  voiceGuideRef.current = {
+    lastText: "",
+    lastSpokenAt: 0,
+    spokenTurnKeys: new Set(),
+    spokenHazardIds: new Set(),
+    arrived: false,
+  };
+};
+
+const announceVoiceNavigation = ({
+  currentPosition,
+  route = [],
+  destination = null,
+  markers = [],
+}) => {
+  if (!currentPosition || !route || route.length < 2) return;
+
+  const destinationPoint = destination || route[route.length - 1];
+
+  const distanceToDestination = voiceDistanceMeters(
+    currentPosition,
+    destinationPoint
+  );
+
+  if (
+    distanceToDestination <= 20 &&
+    voiceGuideRef.current.arrived === false
+  ) {
+    voiceGuideRef.current.arrived = true;
+
+    voiceSpeak("목적지에 도착했습니다. 안내를 종료해 주세요.", {
+      force: true,
+    });
+
+    return;
+  }
+
+  const nearbyHazard = voiceFindNearbyHazard(currentPosition, markers);
+
+  if (nearbyHazard) {
+    const markerId =
+      nearbyHazard.marker.id ||
+      `${nearbyHazard.marker.lat}_${nearbyHazard.marker.lng}`;
+
+    const hazardKey = `${markerId}_${nearbyHazard.level}`;
+
+    if (!voiceGuideRef.current.spokenHazardIds.has(hazardKey)) {
+      voiceGuideRef.current.spokenHazardIds.add(hazardKey);
+
+      const label = voiceMarkerLabel(nearbyHazard.marker);
+
+      const roundedDistance = Math.max(
+        5,
+        Math.round(nearbyHazard.distance / 5) * 5
+      );
+
+      if (nearbyHazard.level === 2) {
+        voiceSpeak(
+          `전방 ${roundedDistance}미터 안에 2단계 위험 구간이 있습니다. ${label}에 주의하세요.`,
+          { force: true }
+        );
+      } else {
+        voiceSpeak(
+          `근처 ${roundedDistance}미터 안에 1단계 주의 구간이 있습니다. ${label}에 주의하세요.`
+        );
+      }
+
+      return;
+    }
+  }
+
+  const upcomingTurn = voiceFindUpcomingTurn(currentPosition, route);
+
+  if (!upcomingTurn) return;
+
+  const threshold =
+    upcomingTurn.distance <= 30
+      ? "near"
+      : upcomingTurn.distance <= 80
+      ? "far"
+      : null;
+
+  if (!threshold) return;
+
+  const turnKey = `${upcomingTurn.index}_${threshold}`;
+
+  if (voiceGuideRef.current.spokenTurnKeys.has(turnKey)) {
+    return;
+  }
+
+  voiceGuideRef.current.spokenTurnKeys.add(turnKey);
+
+  const roundedDistance = Math.max(
+    10,
+    Math.round(upcomingTurn.distance / 10) * 10
+  );
+
+  if (threshold === "near") {
+    voiceSpeak(`잠시 후 ${upcomingTurn.direction}으로 이동하세요.`, {
+      force: true,
+    });
+  } else {
+    voiceSpeak(
+      `약 ${roundedDistance}미터 후 ${upcomingTurn.direction}으로 이동하세요.`
+    );
+  }
+};
 const renderMarkerTypeFilter = () => {
   const typeEntries = Object.entries(bfConfig || {});
 
@@ -6519,7 +6863,7 @@ return (
     display: "flex",
     flexDirection: "column",
     gap: isMobile ? "8px" : "12px",
-    boxSizing: isMobile ? "content-box" : "border-box",
+    boxSizing: "border-box",
     boxShadow: isMobile
       ? "none"
       : "8px 0 24px rgba(15, 23, 42, 0.04)",
@@ -7015,7 +7359,11 @@ background: isSelected ? "#2563EB" : "transparent",
         alert("목적지를 먼저 설정해 주세요.");
         return;
       }
+resetVoiceGuide();
 
+voiceSpeak("음성 안내를 시작합니다. 추천 경로를 따라 이동해 주세요.", {
+  force: true,
+});
       startLiveLocationTracking({
   navigationMode: true,
   route: routeSteps,
@@ -7515,7 +7863,7 @@ weatherInfo={weatherInfo}
     overflowY: isMobile ? "visible" : "auto",
     position: "relative",
     zIndex: 3000,
-    boxSizing: isMobile ? "content-box" : "border-box",
+    boxSizing: "border-box",
     boxShadow: isMobile
       ? "none"
       : "8px 0 24px rgba(15, 23, 42, 0.04)",
