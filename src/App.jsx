@@ -756,28 +756,31 @@ const validMarkers = markerSource
     ? "#F59E0B"
     : "#94A3B8";
   const markerShadow = isPuddleMarker
-    ? "0 6px 16px rgba(14, 165, 233, 0.45)"
-    : "0 4px 12px rgba(15, 23, 42, 0.18)";
+  ? "0 4px 10px rgba(14, 165, 233, 0.30)"
+  : "0 2px 7px rgba(15, 23, 42, 0.14)";
 
-  const markerEl = document.createElement("div");
+ const markerEl = document.createElement("div");
 
-  Object.assign(markerEl.style, {
+markerEl.dataset.wheelMarker = "true";
+markerEl.dataset.puddleMarker = isPuddleMarker ? "true" : "false";
+
+Object.assign(markerEl.style, {
     position: "relative",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
 
-    width: isPuddleMarker ? "40px" : "36px",
-    height: isPuddleMarker ? "40px" : "36px",
-    borderRadius: "50%",
+   width: isPuddleMarker ? "32px" : "30px",
+height: isPuddleMarker ? "32px" : "30px",
+borderRadius: "50%",
 
-    background: markerBgColor,
-    color: isPuddleMarker ? "#FFFFFF" : "#334155",
-    fontSize: isPuddleMarker ? "22px" : "18px",
-    fontWeight: "900",
+background: markerBgColor,
+color: isPuddleMarker ? "#FFFFFF" : "#334155",
+fontSize: isPuddleMarker ? "17px" : "15px",
+fontWeight: "900",
 
-    border: `2.5px solid ${markerBorderColor}`,
-    boxShadow: markerShadow,
+border: `2px solid ${markerBorderColor}`,
+boxShadow: markerShadow,
     cursor: "pointer",
     userSelect: "none",
 
@@ -1520,28 +1523,31 @@ const validMarkers = markerSource
   : "#94A3B8";
   const markerBorderStyle = isApproved ? "solid" : "dashed";
   const markerShadow = isPuddleMarker
-    ? "0 6px 16px rgba(14, 165, 233, 0.45)"
-    : "0 4px 12px rgba(0,0,0,0.25)";
+  ? "0 4px 10px rgba(14, 165, 233, 0.30)"
+  : "0 2px 7px rgba(15, 23, 42, 0.14)";
 
   const markerEl = document.createElement("div");
 
-  Object.assign(markerEl.style, {
+markerEl.dataset.wheelMarker = "true";
+markerEl.dataset.puddleMarker = isPuddleMarker ? "true" : "false";
+
+Object.assign(markerEl.style, {
     position: "relative",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
 
-    width: isPuddleMarker ? "40px" : "38px",
-    height: isPuddleMarker ? "40px" : "38px",
-    borderRadius: "50%",
+    width: isPuddleMarker ? "32px" : "30px",
+height: isPuddleMarker ? "32px" : "30px",
+borderRadius: "50%",
 
-    background: markerBgColor,
-    color: markerTextColor,
-    fontSize: isPuddleMarker ? "22px" : "20px",
-    fontWeight: "900",
+background: markerBgColor,
+color: isPuddleMarker ? "#FFFFFF" : "#334155",
+fontSize: isPuddleMarker ? "17px" : "15px",
+fontWeight: "900",
 
-    border: `3px ${markerBorderStyle} ${markerBorderColor}`,
-    boxShadow: markerShadow,
+border: `2px solid ${markerBorderColor}`,
+boxShadow: markerShadow,
     cursor: "pointer",
     userSelect: "none",
     opacity: isApproved ? "1" : "0.65",
@@ -3293,7 +3299,53 @@ const SurveyInviteCard = ({ compact = false }) => {
 // false = 물고임 아이콘 숨김
 // ================================
 const DEFAULT_RAINY_MODE = false;
+const applyWheelMarkerZoomStyle = (map) => {
+  if (!map || typeof map.getLevel !== "function") return;
 
+  const level = Number(map.getLevel());
+  const markerEls = document.querySelectorAll("[data-wheel-marker='true']");
+
+  markerEls.forEach((markerEl) => {
+    const isPuddleMarker = markerEl.dataset.puddleMarker === "true";
+
+    if (level >= 7) {
+      markerEl.style.display = "none";
+      return;
+    }
+
+    markerEl.style.display = "flex";
+
+    if (level >= 6) {
+      markerEl.style.width = isPuddleMarker ? "24px" : "22px";
+      markerEl.style.height = isPuddleMarker ? "24px" : "22px";
+      markerEl.style.fontSize = isPuddleMarker ? "13px" : "12px";
+      markerEl.style.borderWidth = "1.5px";
+      markerEl.style.boxShadow = isPuddleMarker
+        ? "0 2px 6px rgba(14, 165, 233, 0.22)"
+        : "0 1px 4px rgba(15, 23, 42, 0.12)";
+      return;
+    }
+
+    if (level >= 5) {
+      markerEl.style.width = isPuddleMarker ? "28px" : "26px";
+      markerEl.style.height = isPuddleMarker ? "28px" : "26px";
+      markerEl.style.fontSize = isPuddleMarker ? "15px" : "13px";
+      markerEl.style.borderWidth = "1.8px";
+      markerEl.style.boxShadow = isPuddleMarker
+        ? "0 3px 8px rgba(14, 165, 233, 0.26)"
+        : "0 2px 6px rgba(15, 23, 42, 0.14)";
+      return;
+    }
+
+    markerEl.style.width = isPuddleMarker ? "32px" : "30px";
+    markerEl.style.height = isPuddleMarker ? "32px" : "30px";
+    markerEl.style.fontSize = isPuddleMarker ? "17px" : "15px";
+    markerEl.style.borderWidth = "2px";
+    markerEl.style.boxShadow = isPuddleMarker
+      ? "0 4px 10px rgba(14, 165, 233, 0.30)"
+      : "0 2px 7px rgba(15, 23, 42, 0.14)";
+  });
+};
 function App() {
   const KAKAO_REST_API_KEY = "1425cc58ea2a07e5aea6e01a9b0dac74";
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -4130,49 +4182,210 @@ const animateWheelTrack = (fullRoute) => {
 };
 
 const ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjZiMjY1Y2E5NjZjODQxZmE5MjJjNDEzM2IyYWNhN2U2IiwiaCI6Im11cm11cjY0In0=";
-const getObstacles = (mode, bfMarkers) => {
-  // 일반 모드거나 마커가 없으면 회피 안 함
-  if (mode === "normal" || !bfMarkers || bfMarkers.length === 0) {
+const getObstacles = (mode, bfMarkers, start, end) => {
+  // 일반길은 장애물 회피를 아예 넣지 않음
+  if (mode === "normal" || !Array.isArray(bfMarkers) || bfMarkers.length === 0) {
     return null;
   }
 
-  // ✅ 승인된 마커만 경로 회피에 사용
-  const approvedMarkers = bfMarkers.filter(
-  (m) =>
-    (m.status === "approved" || m.isOfficial === true) &&
-    m.type !== "puddle"
-);
+  const modeSettings = {
+    // 바퀴길: 2단계 위험만 회피
+    wheel2: {
+      label: "바퀴길",
+      levels: [2],
+      maxAvoidCount: 8,
+      buffer: 0.00008,
+    },
 
-  let targetMarkers = [];
+    // 바퀴+길: 2단계 우선 회피 + 1단계도 일부 회피
+    wheel1: {
+      label: "바퀴+길",
+      levels: [2, 1],
+      maxAvoidCount: 12,
+      buffer: 0.00008,
+    },
+  };
 
-  // wheel1: 1단계, 2단계 모두 회피
-  if (mode === "wheel1") {
-    targetMarkers = approvedMarkers.filter(
-      (m) => Number(m.wheelLevel) === 1 || Number(m.wheelLevel) === 2
-    );
+  const setting = modeSettings[mode];
+
+  if (!setting) {
+    return null;
   }
 
-  // wheel2: 2단계만 회피
-  else if (mode === "wheel2") {
-    targetMarkers = approvedMarkers.filter(
-      (m) => Number(m.wheelLevel) === 2
+  const startLat = Number(start?.lat);
+  const startLng = Number(start?.lng);
+  const endLat = Number(end?.lat);
+  const endLng = Number(end?.lng);
+
+  const hasRouteBounds =
+    !Number.isNaN(startLat) &&
+    !Number.isNaN(startLng) &&
+    !Number.isNaN(endLat) &&
+    !Number.isNaN(endLng);
+
+  // 출발지~목적지 주변만 후보로 사용
+  // 너무 먼 장애물까지 ORS에 보내면 요청이 무거워짐
+  const margin = 0.005;
+
+  const minLat = hasRouteBounds
+    ? Math.min(startLat, endLat) - margin
+    : -Infinity;
+
+  const maxLat = hasRouteBounds
+    ? Math.max(startLat, endLat) + margin
+    : Infinity;
+
+  const minLng = hasRouteBounds
+    ? Math.min(startLng, endLng) - margin
+    : -Infinity;
+
+  const maxLng = hasRouteBounds
+    ? Math.max(startLng, endLng) + margin
+    : Infinity;
+
+  const toXY = (lat, lng) => {
+    const baseLat = hasRouteBounds
+      ? ((startLat + endLat) / 2) * (Math.PI / 180)
+      : Number(lat) * (Math.PI / 180);
+
+    return {
+      x: Number(lng) * Math.cos(baseLat) * 111320,
+      y: Number(lat) * 110540,
+    };
+  };
+
+  const getDistanceToRouteLine = (marker) => {
+    if (!hasRouteBounds) return 0;
+
+    const point = toXY(marker.lat, marker.lng);
+    const a = toXY(startLat, startLng);
+    const b = toXY(endLat, endLng);
+
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+
+    const lengthSq = dx * dx + dy * dy;
+
+    if (lengthSq === 0) {
+      return Math.sqrt(
+        Math.pow(point.x - a.x, 2) + Math.pow(point.y - a.y, 2)
+      );
+    }
+
+    const t = Math.max(
+      0,
+      Math.min(
+        1,
+        ((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSq
+      )
     );
+
+    const projected = {
+      x: a.x + dx * t,
+      y: a.y + dy * t,
+    };
+
+    return Math.sqrt(
+      Math.pow(point.x - projected.x, 2) +
+        Math.pow(point.y - projected.y, 2)
+    );
+  };
+
+  const approvedMarkers = bfMarkers
+    .filter((m) => {
+      const lat = Number(m?.lat);
+      const lng = Number(m?.lng);
+      const level = Number(m?.wheelLevel || 0);
+
+      return (
+        m &&
+        (m.status === "approved" || m.isOfficial === true) &&
+        m.type !== "puddle" &&
+        setting.levels.includes(level) &&
+        !Number.isNaN(lat) &&
+        !Number.isNaN(lng) &&
+        lat >= minLat &&
+        lat <= maxLat &&
+        lng >= minLng &&
+        lng <= maxLng
+      );
+    })
+    .map((m) => ({
+      ...m,
+      lat: Number(m.lat),
+      lng: Number(m.lng),
+      wheelLevel: Number(m.wheelLevel || 0),
+    }));
+
+  if (approvedMarkers.length === 0) {
+    console.log("🧱 회피 마커 없음:", {
+      mode,
+      label: setting.label,
+    });
+
+    return null;
   }
 
-  if (targetMarkers.length === 0) return null;
+  // 거의 같은 위치의 마커 중복 제거
+  // 같은 구역에 여러 번 찍힌 마커가 ORS 요청을 불필요하게 무겁게 만드는 것 방지
+  const groupedByLocation = new Map();
 
-  const polygons = targetMarkers.map((marker) => {
-    const buffer = 0.00015;
+  approvedMarkers.forEach((marker) => {
+    const key = `${marker.lat.toFixed(4)}_${marker.lng.toFixed(4)}`;
+    const previous = groupedByLocation.get(key);
 
-    return [[
-      [marker.lng - buffer, marker.lat - buffer],
-      [marker.lng + buffer, marker.lat - buffer],
-      [marker.lng + buffer, marker.lat + buffer],
-      [marker.lng - buffer, marker.lat + buffer],
-      [marker.lng - buffer, marker.lat - buffer],
-    ]];
+    // 같은 위치면 더 위험한 단계가 높은 마커를 남김
+    if (!previous || marker.wheelLevel > previous.wheelLevel) {
+      groupedByLocation.set(key, marker);
+    }
   });
 
+  const dedupedMarkers = Array.from(groupedByLocation.values());
+
+  const sortedMarkers = dedupedMarkers
+    .map((marker) => ({
+      ...marker,
+      distanceToRouteLine: getDistanceToRouteLine(marker),
+    }))
+    .sort((a, b) => {
+      // 2단계 위험을 먼저 보냄
+      if (b.wheelLevel !== a.wheelLevel) {
+        return b.wheelLevel - a.wheelLevel;
+      }
+
+      // 그다음 실제 경로 직선에 가까운 장애물을 먼저 보냄
+      return a.distanceToRouteLine - b.distanceToRouteLine;
+    });
+
+  const selectedMarkers = sortedMarkers.slice(0, setting.maxAvoidCount);
+
+  console.log("🧱 회피 마커 정리:", {
+    mode,
+    label: setting.label,
+    approvedCount: approvedMarkers.length,
+    dedupedCount: dedupedMarkers.length,
+    sentCount: selectedMarkers.length,
+    level2Sent: selectedMarkers.filter((m) => Number(m.wheelLevel) === 2).length,
+    level1Sent: selectedMarkers.filter((m) => Number(m.wheelLevel) === 1).length,
+  });
+
+  if (selectedMarkers.length === 0) {
+    return null;
+  }
+
+  const polygons = selectedMarkers.map((marker) => {
+    const buffer = setting.buffer;
+
+    return [
+      [
+        [marker.lng - buffer, marker.lat - buffer],
+        [marker.lng + buffer, marker.lat - buffer],
+        [marker.lng + buffer, marker.lat + buffer],
+        [marker.lng - buffer, marker.lat + buffer],
+        [marker.lng - buffer, marker.lat - buffer],
+      ],
+    ];
+  });
 
   return {
     type: "MultiPolygon",
@@ -4180,48 +4393,103 @@ const getObstacles = (mode, bfMarkers) => {
   };
 };
 const getRoute = async (start, end, mode = "normal", bfMarkers = []) => {
-  const emptyRouteResult = {
+  const emptyRouteResult = (reason = "UNKNOWN") => ({
     routeCoords: [],
     distance: 0,
-    duration: 0
-  };
+    duration: 0,
+    reason,
+  });
 
   try {
-    const avoidOptions = getObstacles(mode, bfMarkers);
+    const avoidOptions = getObstacles(mode, bfMarkers, start, end);
 
     const bodyData = {
       coordinates: [
         [start.lng, start.lat],
         [end.lng, end.lat],
-      ]
+      ],
     };
 
     if (avoidOptions) {
       bodyData.options = {
-        avoid_polygons: avoidOptions
+        avoid_polygons: avoidOptions,
       };
     }
 
-    const url = "https://api.openrouteservice.org/v2/directions/wheelchair/geojson";
+    console.log("🚗 ORS 요청 모드:", mode);
+    console.log("🚗 ORS 요청 bodyData:", JSON.stringify(bodyData, null, 2));
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: ORS_API_KEY,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(bodyData),
-    });
+    const url =
+      "https://api.openrouteservice.org/v2/directions/wheelchair/geojson";
+
+    const fetchRouteOnce = async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 35000);
+
+      try {
+        return await fetch(url, {
+          method: "POST",
+          headers: {
+            Authorization: ORS_API_KEY,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(bodyData),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
+
+    let res = await fetchRouteOnce();
+
+    if (res.status === 502 || res.status === 503 || res.status === 504) {
+      console.warn(
+        "ORS 서버 오류. 1초 후 한 번 더 시도합니다:",
+        res.status
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      res = await fetchRouteOnce();
+    }
+
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => "");
+
+      console.error("ORS 응답 실패:", {
+        status: res.status,
+        errorText,
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        return emptyRouteResult("AUTH_ERROR");
+      }
+
+      if (res.status === 429) {
+        return emptyRouteResult("RATE_LIMIT");
+      }
+
+      if (res.status === 502 || res.status === 503 || res.status === 504) {
+        return emptyRouteResult("SERVER_ERROR");
+      }
+
+      return emptyRouteResult("ROUTE_ERROR");
+    }
 
     const data = await res.json();
 
     if (data.error) {
       console.error("API 에러 상세:", data.error);
-      return emptyRouteResult;
+
+      if (data.error.code === 2009) {
+        return emptyRouteResult("NO_ROUTE");
+      }
+
+      return emptyRouteResult("ROUTE_ERROR");
     }
 
     if (!data.features || data.features.length === 0) {
-      return emptyRouteResult;
+      return emptyRouteResult("NO_ROUTE");
     }
 
     const routeCoords = data.features[0].geometry.coordinates.map(
@@ -4233,13 +4501,17 @@ const getRoute = async (start, end, mode = "normal", bfMarkers = []) => {
     return {
       routeCoords,
       distance: (summary.distance / 1000).toFixed(1),
-      duration: Math.round(summary.duration / 60)
+      duration: Math.round(summary.duration / 60),
+      reason: "OK",
     };
-
   } catch (err) {
     console.error("getRoute 오류:", err);
-    console.error(err.stack);
-    return emptyRouteResult;
+
+    if (err.name === "AbortError") {
+      return emptyRouteResult("TIMEOUT");
+    }
+
+    return emptyRouteResult("NETWORK_ERROR");
   }
 };
 const handleSearchRoute = async (e) => {
@@ -4360,9 +4632,24 @@ setRouteInfo({
 
 
     if (!route || route.length === 0) {
-      alert("경로 생성 실패 (매칭되는 도보/도로가 없습니다)");
-      return;
-    }
+  if (result.reason === "TIMEOUT") {
+    alert("경로 서버 응답이 너무 오래 걸립니다. 잠시 후 다시 시도해 주세요.");
+  } else if (result.reason === "SERVER_ERROR") {
+    alert("경로 서버가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도해 주세요.");
+  } else if (result.reason === "NETWORK_ERROR") {
+    alert("경로 서버 요청에 실패했습니다. 인터넷 연결 또는 ORS 서버 상태를 확인해 주세요.");
+  } else if (result.reason === "AUTH_ERROR") {
+    alert("경로 API 키 인증에 문제가 있습니다. ORS API 키를 확인해 주세요.");
+  } else if (result.reason === "RATE_LIMIT") {
+    alert("경로 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.");
+  } else if (result.reason === "NO_ROUTE") {
+    alert("해당 출발지와 목적지 사이에서 경로를 찾지 못했습니다. 위치를 조금 조정해 주세요.");
+  } else {
+    alert("경로 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+  }
+
+  return;
+}
 
     // 🔥 3. 지도 이동
     if (mapRef.current && typeof mapRef.current.fitBounds === "function") {
@@ -4873,6 +5160,48 @@ useEffect(() => {
     stopLiveLocationTracking();
   };
 }, []);
+
+useEffect(() => {
+  if (currentView !== "search" && currentView !== "create") {
+    return;
+  }
+
+  let intervalId = null;
+  let timeoutId1 = null;
+  let timeoutId2 = null;
+
+  const applyMarkerStyleByZoom = () => {
+    const map = mapRef.current;
+
+    if (!map || typeof map.getLevel !== "function") {
+      return;
+    }
+
+    applyWheelMarkerZoomStyle(map);
+  };
+
+  applyMarkerStyleByZoom();
+
+  timeoutId1 = setTimeout(applyMarkerStyleByZoom, 300);
+  timeoutId2 = setTimeout(applyMarkerStyleByZoom, 900);
+
+  intervalId = setInterval(applyMarkerStyleByZoom, 400);
+
+  return () => {
+    if (intervalId) {
+      clearInterval(intervalId);
+    }
+
+    if (timeoutId1) {
+      clearTimeout(timeoutId1);
+    }
+
+    if (timeoutId2) {
+      clearTimeout(timeoutId2);
+    }
+  };
+}, [currentView, bfMarkers.length]);
+
 function MapSetter({ mapRef }) {
   const map = useMap();
   useEffect(() => {
