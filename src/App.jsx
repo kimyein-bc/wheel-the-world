@@ -3558,55 +3558,126 @@ const [tempMarker, setTempMarker] = useState(null); // 지도 클릭 시 임시 
 const handleSearchKeywordChange = async (value) => {
   setSearchKeyword(value);
 
-  if (!value.trim()) {
+  const trimmed = value.trim();
+
+  if (!trimmed || trimmed.length < 2) {
     setSearchSuggestions([]);
     return;
   }
 
   try {
+    const query =
+      trimmed.includes("고양") || trimmed.includes("화정")
+        ? trimmed
+        : `경기도 고양시 덕양구 화정동 ${trimmed}`;
+
     const res = await fetch(
-      `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(value)}&size=5`,
+      `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=5`,
       {
         headers: {
-          Authorization: `KakaoAK ${KAKAO_REST_API_KEY}`
-        }
+          Authorization: `KakaoAK ${KAKAO_REST_API_KEY}`,
+        },
       }
     );
 
     const data = await res.json();
 
+    if (!res.ok) {
+      console.error("카카오 자동완성 실패:", {
+        status: res.status,
+        data,
+      });
+      setSearchSuggestions([]);
+      return;
+    }
+
     setSearchSuggestions(
-      data.documents?.map(item => ({
+      data.documents?.map((item) => ({
         name: item.place_name,
+        address: item.road_address_name || item.address_name || "",
         lat: Number(item.y),
-        lng: Number(item.x)
+        lng: Number(item.x),
       })) || []
     );
   } catch (err) {
-    console.error(err);
+    console.error("자동완성 검색 오류:", err);
+    setSearchSuggestions([]);
   }
 };
 const handleSearchPlace = async () => {
+  const target = searchKeyword.trim();
+  if (!target) return;
 
-  if (!searchKeyword.trim()) return;
-
-  const response = await fetch(
-    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchKeyword)}`
-  );
-
-  const data = await response.json();
-
-  if (!data.length) {
-    alert("검색 결과가 없습니다.");
+  // 이미 등록해둔 주요 장소면 바로 이동
+  if (locationPoints[target]) {
+    if (mapRef.current) {
+      mapRef.current.flyTo(locationPoints[target], 17, {
+        animate: true,
+        duration: 1.2,
+      });
+    }
     return;
   }
 
-  const lat = Number(data[0].lat);
-  const lng = Number(data[0].lon);
+  try {
+    const queries = [
+      target.includes("고양") || target.includes("화정")
+        ? target
+        : `경기도 고양시 덕양구 화정동 ${target}`,
+      target,
+    ];
 
-  mapRef.current.flyTo([lat, lng], 18, {
-    duration: 1.5
-  });
+    let foundPlace = null;
+
+    for (const query of queries) {
+      const response = await fetch(
+        `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=5`,
+        {
+          headers: {
+            Authorization: `KakaoAK ${KAKAO_REST_API_KEY}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error("카카오 장소 검색 실패:", {
+          status: response.status,
+          data,
+        });
+        continue;
+      }
+
+      if (data.documents && data.documents.length > 0) {
+        foundPlace = data.documents[0];
+        break;
+      }
+    }
+
+    if (!foundPlace) {
+      alert(`'${target}'에 대한 위치를 찾을 수 없습니다. 장소명을 조금 더 정확히 입력해 주세요.`);
+      return;
+    }
+
+    const lat = Number(foundPlace.y);
+    const lng = Number(foundPlace.x);
+
+    if (Number.isNaN(lat) || Number.isNaN(lng)) {
+      alert("검색된 위치의 좌표가 올바르지 않습니다.");
+      return;
+    }
+
+    if (mapRef.current) {
+      mapRef.current.flyTo([lat, lng], 17, {
+        animate: true,
+        duration: 1.2,
+      });
+    }
+  } catch (error) {
+    console.error("장소 검색 중 오류:", error);
+    alert("검색 중 오류가 발생했습니다. 카카오 REST API 키를 확인해 주세요.");
+  }
 };
 const [searchKeyword, setSearchKeyword] = useState("");
 const [searchSuggestions, setSearchSuggestions] = useState([]);
@@ -4392,6 +4463,60 @@ const getObstacles = (mode, bfMarkers, start, end) => {
     coordinates: polygons,
   };
 };
+const makeRouteCacheKey = (start, end, mode) => {
+  const sLat = Number(start?.lat).toFixed(5);
+  const sLng = Number(start?.lng).toFixed(5);
+  const eLat = Number(end?.lat).toFixed(5);
+  const eLng = Number(end?.lng).toFixed(5);
+
+  return `wheelWorldRouteCache_${mode}_${sLat}_${sLng}_${eLat}_${eLng}`;
+};
+
+const saveRouteCache = (start, end, mode, result) => {
+  try {
+    if (!result?.routeCoords || result.routeCoords.length < 2) return;
+
+    localStorage.setItem(
+      makeRouteCacheKey(start, end, mode),
+      JSON.stringify({
+        savedAt: Date.now(),
+        routeCoords: result.routeCoords,
+        distance: result.distance,
+        duration: result.duration,
+        mode,
+        reason: result.reason,
+      })
+    );
+
+    console.log("✅ 경로 캐시 저장 완료");
+  } catch (error) {
+    console.warn("경로 캐시 저장 실패:", error);
+  }
+};
+
+const loadRouteCache = (start, end, mode) => {
+  try {
+    const raw = localStorage.getItem(makeRouteCacheKey(start, end, mode));
+    if (!raw) return null;
+
+    const cached = JSON.parse(raw);
+
+    if (!cached?.routeCoords || cached.routeCoords.length < 2) {
+      return null;
+    }
+
+    return {
+      routeCoords: cached.routeCoords,
+      distance: cached.distance || 0,
+      duration: cached.duration || 0,
+      reason: "CACHED_ROUTE",
+    };
+  } catch (error) {
+    console.warn("경로 캐시 불러오기 실패:", error);
+    return null;
+  }
+};
+
 const getRoute = async (start, end, mode = "normal", bfMarkers = []) => {
   const emptyRouteResult = (reason = "UNKNOWN") => ({
     routeCoords: [],
@@ -4400,84 +4525,30 @@ const getRoute = async (start, end, mode = "normal", bfMarkers = []) => {
     reason,
   });
 
-  try {
-    const avoidOptions = getObstacles(mode, bfMarkers, start, end);
+  const avoidOptions = getObstacles(mode, bfMarkers, start, end);
 
-    const bodyData = {
-      coordinates: [
-        [start.lng, start.lat],
-        [end.lng, end.lat],
-      ],
+  const bodyData = {
+    coordinates: [
+      [start.lng, start.lat],
+      [end.lng, end.lat],
+    ],
+  };
+
+  if (avoidOptions) {
+    bodyData.options = {
+      avoid_polygons: avoidOptions,
     };
+  }
 
-    if (avoidOptions) {
-      bodyData.options = {
-        avoid_polygons: avoidOptions,
-      };
-    }
+  console.log("🚗 ORS 요청 모드:", mode);
+  console.log("🚗 ORS 회피 옵션 있음?:", !!avoidOptions);
+  console.log(
+    "🚗 ORS 회피 폴리곤 개수:",
+    avoidOptions?.coordinates?.length || 0
+  );
+  console.log("🚗 ORS 요청 bodyData:", JSON.stringify(bodyData, null, 2));
 
-    console.log("🚗 ORS 요청 모드:", mode);
-    console.log("🚗 ORS 요청 bodyData:", JSON.stringify(bodyData, null, 2));
-
-    const url =
-      "https://api.openrouteservice.org/v2/directions/wheelchair/geojson";
-
-    const fetchRouteOnce = async () => {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 35000);
-
-      try {
-        return await fetch(url, {
-          method: "POST",
-          headers: {
-            Authorization: ORS_API_KEY,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(bodyData),
-          signal: controller.signal,
-        });
-      } finally {
-        clearTimeout(timeoutId);
-      }
-    };
-
-    let res = await fetchRouteOnce();
-
-    if (res.status === 502 || res.status === 503 || res.status === 504) {
-      console.warn(
-        "ORS 서버 오류. 1초 후 한 번 더 시도합니다:",
-        res.status
-      );
-
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      res = await fetchRouteOnce();
-    }
-
-    if (!res.ok) {
-      const errorText = await res.text().catch(() => "");
-
-      console.error("ORS 응답 실패:", {
-        status: res.status,
-        errorText,
-      });
-
-      if (res.status === 401 || res.status === 403) {
-        return emptyRouteResult("AUTH_ERROR");
-      }
-
-      if (res.status === 429) {
-        return emptyRouteResult("RATE_LIMIT");
-      }
-
-      if (res.status === 502 || res.status === 503 || res.status === 504) {
-        return emptyRouteResult("SERVER_ERROR");
-      }
-
-      return emptyRouteResult("ROUTE_ERROR");
-    }
-
-    const data = await res.json();
-
+  const parseRouteData = (data, profile) => {
     if (data.error) {
       console.error("API 에러 상세:", data.error);
 
@@ -4496,23 +4567,139 @@ const getRoute = async (start, end, mode = "normal", bfMarkers = []) => {
       ([lng, lat]) => [lat, lng]
     );
 
-    const summary = data.features[0].properties.summary;
+    const summary = data.features[0].properties.summary || {};
 
     return {
       routeCoords,
-      distance: (summary.distance / 1000).toFixed(1),
-      duration: Math.round(summary.duration / 60),
-      reason: "OK",
+      distance: summary.distance ? (summary.distance / 1000).toFixed(1) : 0,
+      duration: summary.duration ? Math.round(summary.duration / 60) : 0,
+      reason: avoidOptions ? "OK_AVOID" : "OK",
+      profile,
+      avoidCount: avoidOptions?.coordinates?.length || 0,
     };
-  } catch (err) {
-    console.error("getRoute 오류:", err);
+  };
 
-    if (err.name === "AbortError") {
-      return emptyRouteResult("TIMEOUT");
+  const fetchRouteOnce = async (profile, timeoutMs = 60000) => {
+    const controller = new AbortController();
+
+    const timeoutId = setTimeout(() => {
+      console.warn(
+        `⏰ ORS ${profile} 요청이 ${timeoutMs / 1000}초를 넘어서 중단됨`
+      );
+      controller.abort();
+    }, timeoutMs);
+
+    const url = `https://api.openrouteservice.org/v2/directions/${profile}/geojson`;
+
+    try {
+      console.log("🚗 ORS 요청 프로필:", profile);
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: ORS_API_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(bodyData),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => "");
+
+        console.error("ORS 응답 실패:", {
+          profile,
+          status: res.status,
+          errorText,
+        });
+
+        if (res.status === 401 || res.status === 403) {
+          return emptyRouteResult("AUTH_ERROR");
+        }
+
+        if (res.status === 429) {
+          return emptyRouteResult("RATE_LIMIT");
+        }
+
+        if (res.status === 502 || res.status === 503 || res.status === 504) {
+          return emptyRouteResult("SERVER_ERROR");
+        }
+
+        return emptyRouteResult("ROUTE_ERROR");
+      }
+
+      const data = await res.json();
+      return parseRouteData(data, profile);
+    } catch (err) {
+      console.error(`getRoute 오류 (${profile}):`, err);
+
+      if (err.name === "AbortError") {
+        return emptyRouteResult("TIMEOUT");
+      }
+
+      return emptyRouteResult("NETWORK_ERROR");
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
+  // 예전 코드에서 잘 되던 wheelchair를 먼저 시도하고,
+  // 안 되면 foot-walking으로 넘어감.
+  const profiles = ["wheelchair", "foot-walking"];
+
+  let lastResult = emptyRouteResult("UNKNOWN");
+
+  for (const profile of profiles) {
+    // 1차 시도
+    let result = await fetchRouteOnce(profile, 60000);
+
+    if (result.routeCoords.length > 0) {
+      console.log("✅ ORS 경로 생성 성공:", result);
+      saveRouteCache(start, end, mode, result);
+      return result;
     }
 
-    return emptyRouteResult("NETWORK_ERROR");
+    if (result.reason === "AUTH_ERROR" || result.reason === "RATE_LIMIT") {
+      return result;
+    }
+
+    console.warn("⚠️ ORS 1차 실패. 같은 프로필로 한 번 더 시도:", {
+      profile,
+      reason: result.reason,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+
+    // 2차 시도
+    result = await fetchRouteOnce(profile, 60000);
+
+    if (result.routeCoords.length > 0) {
+      console.log("✅ ORS 재시도 성공:", result);
+      saveRouteCache(start, end, mode, result);
+      return result;
+    }
+
+    if (result.reason === "AUTH_ERROR" || result.reason === "RATE_LIMIT") {
+      return result;
+    }
+
+    lastResult = result;
+
+    console.warn("⚠️ 해당 프로필 최종 실패. 다음 프로필로 넘어감:", {
+      profile,
+      reason: result.reason,
+    });
   }
+
+  // ORS가 순간적으로 죽었을 때 마지막 성공 경로라도 표시
+  const cachedRoute = loadRouteCache(start, end, mode);
+
+  if (cachedRoute) {
+    console.warn("⚠️ ORS 응답 실패. 마지막으로 성공했던 경로 캐시를 표시합니다.");
+    return cachedRoute;
+  }
+
+  return lastResult;
 };
 const handleSearchRoute = async (e) => {
   e.preventDefault();
@@ -4625,6 +4812,11 @@ const result = await getRoute(
   approvedRouteMarkers
 );
 const route = result.routeCoords;
+if (result.reason === "CACHED_ROUTE") {
+  alert(
+    "경로 서버 응답이 불안정해서, 마지막으로 성공했던 경로를 표시합니다."
+  );
+}
 setRouteInfo({
   distance: result.distance,
   duration: result.duration
@@ -8315,9 +8507,21 @@ weatherInfo={weatherInfo}
         <li
           key={idx}
           onClick={() => {
-            setSearchKeyword(name);
-            setSearchSuggestions([]);
-          }}
+  setSearchKeyword(name);
+  setSearchSuggestions([]);
+
+  if (
+    typeof item === "object" &&
+    !Number.isNaN(Number(item.lat)) &&
+    !Number.isNaN(Number(item.lng)) &&
+    mapRef.current
+  ) {
+    mapRef.current.flyTo([Number(item.lat), Number(item.lng)], 17, {
+      animate: true,
+      duration: 1.2,
+    });
+  }
+}}
           style={{
             padding: "10px 12px",
             fontSize: "13px",
