@@ -4033,6 +4033,174 @@ const downloadBfMarkersBackup = async () => {
     alert("백업 중 오류가 발생했습니다. 콘솔을 확인해 주세요.");
   }
 };
+const downloadImprovementReportCsv = () => {
+  if (!isAdminLoggedIn) {
+    alert("관리자만 이동장벽 리포트를 내려받을 수 있습니다.");
+    return;
+  }
+
+  const normalizeType = (type) => {
+    if (type === "stairs") return "step";
+    return type || "step";
+  };
+
+  const getTypeLabel = (type) => {
+    const normalizedType = normalizeType(type);
+    const config = bfConfig[normalizedType];
+
+    if (!config) return "기타";
+
+    return String(config.label || "기타")
+      .replace(config.icon || "", "")
+      .trim();
+  };
+
+  const getRiskLabel = (wheelLevel) => {
+    const level = Number(wheelLevel || 0);
+
+    if (level === 2) return "2단계: 회피 권장";
+    if (level === 1) return "1단계: 주의 필요";
+    return "미분류";
+  };
+
+  const getPriority = (marker) => {
+    const level = Number(marker.wheelLevel || 0);
+    const hasImage = marker.hasImage === true;
+
+    if (level === 2 && hasImage) return "상";
+    if (level === 2) return "상";
+    if (level === 1 && hasImage) return "중";
+    if (level === 1) return "중";
+    return "하";
+  };
+
+  const getImprovementSuggestion = (type) => {
+    const normalizedType = normalizeType(type);
+
+    const suggestions = {
+      step: "보도 턱 낮춤, 경사로 설치, 횡단보도 진입부 정비 필요",
+      narrow: "보행 공간 확보, 적치물 정비, 보도 폭 개선 필요",
+      obstacle: "불법 주정차·공사 자재 등 일시적 장애물 관리 및 단속 필요",
+      elevator: "엘리베이터 위치 안내 유지, 고장 여부 점검 및 접근 경로 안내 필요",
+      slope: "급경사 구간 완화, 미끄럼 방지 포장, 우회 안내 표지 설치 필요",
+      sidewalk: "보도블럭 파손 구간 정비, 평탄화 작업 필요",
+      puddle: "배수 정비, 노면 보수, 우천 시 물고임 방지 조치 필요",
+    };
+
+    return suggestions[normalizedType] || "현장 확인 후 보행환경 개선 필요";
+  };
+
+  const formatDate = (marker) => {
+    if (marker.date) return marker.date;
+
+    const createdAt = Number(marker.createdAt || 0);
+    if (!createdAt) return "";
+
+    return new Date(createdAt).toLocaleDateString();
+  };
+
+  const escapeCsv = (value) => {
+    const text = String(value ?? "");
+    return `"${text.replaceAll('"', '""')}"`;
+  };
+
+  const approvedMarkers = (bfMarkers || [])
+    .filter(
+      (marker) =>
+        marker &&
+        !Number.isNaN(Number(marker.lat)) &&
+        !Number.isNaN(Number(marker.lng)) &&
+        (marker.status === "approved" || marker.isOfficial === true)
+    )
+    .map((marker) => ({
+      ...marker,
+      lat: Number(marker.lat),
+      lng: Number(marker.lng),
+      wheelLevel: Number(marker.wheelLevel || 0),
+    }))
+    .sort((a, b) => {
+      if (Number(b.wheelLevel) !== Number(a.wheelLevel)) {
+        return Number(b.wheelLevel) - Number(a.wheelLevel);
+      }
+
+      return Number(b.createdAt || 0) - Number(a.createdAt || 0);
+    });
+
+  if (approvedMarkers.length === 0) {
+    alert("내려받을 승인된 이동장벽 데이터가 없습니다.");
+    return;
+  }
+
+  const headers = [
+    "번호",
+    "개선 우선순위",
+    "위험 단계",
+    "장애물 유형",
+    "상세 설명",
+    "위도",
+    "경도",
+    "지도 링크",
+    "사진 여부",
+    "제보 상태",
+    "공식 등록 여부",
+    "제보일",
+    "개선 제안",
+    "행정 조치 상태",
+    "비고",
+  ];
+
+  const rows = approvedMarkers.map((marker, index) => {
+    const lat = Number(marker.lat).toFixed(6);
+    const lng = Number(marker.lng).toFixed(6);
+
+    const mapLink = `https://www.google.com/maps?q=${lat},${lng}`;
+
+    return [
+      index + 1,
+      getPriority(marker),
+      getRiskLabel(marker.wheelLevel),
+      getTypeLabel(marker.type),
+      marker.desc || "",
+      lat,
+      lng,
+      mapLink,
+      marker.hasImage ? "있음" : "없음",
+      marker.status || "",
+      marker.isOfficial ? "공식 등록" : "시민 제보",
+      formatDate(marker),
+      getImprovementSuggestion(marker.type),
+      "검토 필요",
+      "",
+    ];
+  });
+
+  const csvContent = [
+    headers.map(escapeCsv).join(","),
+    ...rows.map((row) => row.map(escapeCsv).join(",")),
+  ].join("\n");
+
+  // 엑셀에서 한글 깨짐 방지용 BOM
+  const blob = new Blob(["\uFEFF" + csvContent], {
+    type: "text/csv;charset=utf-8;",
+  });
+
+  const today = new Date().toISOString().slice(0, 10);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+
+  a.href = url;
+  a.download = `wheel-the-world-생활권-이동장벽-리포트-${today}.csv`;
+
+  document.body.appendChild(a);
+  a.click();
+
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  alert(
+    `${approvedMarkers.length}개의 이동장벽 데이터를 엑셀용 CSV로 저장했습니다.`
+  );
+};
 const migrateExistingMarkerImages = async () => {
   if (!isAdminLoggedIn) {
     alert("관리자만 사진 정리를 할 수 있습니다.");
@@ -4265,7 +4433,7 @@ const getObstacles = (mode, bfMarkers, start, end) => {
       label: "바퀴길",
       levels: [2],
       maxAvoidCount: 8,
-      buffer: 0.00018
+      buffer: 0.00019
     },
 
     // 바퀴+길: 2단계 우선 회피 + 1단계도 일부 회피
@@ -4273,7 +4441,7 @@ const getObstacles = (mode, bfMarkers, start, end) => {
       label: "바퀴+길",
       levels: [2, 1],
       maxAvoidCount: 12,
-      buffer: 0.00018
+      buffer: 0.00019
     },
   };
 
@@ -4807,6 +4975,19 @@ if (start === "내 위치" && !startCoords) {
     const approvedRouteMarkers = bfMarkers.filter(
   (m) => m.status === "approved" || m.isOfficial === true
 );
+// 새 경로 탐색 전, 이전에 그려진 파란 경로를 먼저 지움
+if (animationRef.current) {
+  cancelAnimationFrame(animationRef.current);
+}
+
+setRouteSteps([]);
+setAnimatedRoute([]);
+setRouteGuide([]);
+setRouteInfo({
+  distance: 0,
+  duration: 0,
+});
+setIsRouteSearched(false);
 
 const result = await getRoute(
   startPos,
@@ -4814,20 +4995,45 @@ const result = await getRoute(
   routeMode,
   approvedRouteMarkers
 );
-const route = result.routeCoords;
-if (result.reason === "CACHED_ROUTE") {
-  alert(
-    "경로 서버 응답이 불안정해서, 마지막으로 성공했던 경로를 표시합니다."
-  );
+const route = result.routeCoords || [];
+const isWheelMode = routeMode === "wheel1" || routeMode === "wheel2";
+
+const clearFailedRoute = () => {
+  setRouteSteps([]);
+  setAnimatedRoute([]);
+  setRouteGuide([]);
+  setRouteInfo({
+    distance: 0,
+    duration: 0,
+  });
+  setIsRouteSearched(false);
+
+  resetVoiceGuide();
+  stopLiveLocationTracking();
+  setIsNavigationActive(false);
+  setIsNavigationFinished(false);
+  setNavigationMessage("");
+  setDistanceToDestination(null);
+};
+
+if (isWheelMode && result.reason === "CACHED_ROUTE") {
+  clearFailedRoute();
+
+  setTimeout(() => {
+    alert("이동장벽을 회피할 수 있는 경로가 없습니다.");
+  }, 100);
+
+  return;
 }
-setRouteInfo({
-  distance: result.distance,
-  duration: result.duration
-});
 
+if (!route || route.length < 2) {
+  clearFailedRoute();
 
-    if (!route || route.length === 0) {
-  if (result.reason === "TIMEOUT") {
+  if (isWheelMode) {
+  setTimeout(() => {
+    alert("이동장벽을 회피할 수 있는 경로가 없습니다.");
+  }, 100);
+}else if (result.reason === "TIMEOUT") {
     alert("경로 서버 응답이 너무 오래 걸립니다. 잠시 후 다시 시도해 주세요.");
   } else if (result.reason === "SERVER_ERROR") {
     alert("경로 서버가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도해 주세요.");
@@ -4837,14 +5043,17 @@ setRouteInfo({
     alert("경로 API 키 인증에 문제가 있습니다. ORS API 키를 확인해 주세요.");
   } else if (result.reason === "RATE_LIMIT") {
     alert("경로 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.");
-  } else if (result.reason === "NO_ROUTE") {
-    alert("해당 출발지와 목적지 사이에서 경로를 찾지 못했습니다. 위치를 조금 조정해 주세요.");
   } else {
-    alert("경로 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+    alert("경로를 찾지 못했습니다. 위치를 조금 조정해 주세요.");
   }
 
   return;
 }
+
+setRouteInfo({
+  distance: result.distance,
+  duration: result.duration,
+});
 
     // 🔥 3. 지도 이동
     if (mapRef.current && typeof mapRef.current.fitBounds === "function") {
