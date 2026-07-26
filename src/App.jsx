@@ -4265,7 +4265,7 @@ const getObstacles = (mode, bfMarkers, start, end) => {
       label: "바퀴길",
       levels: [2],
       maxAvoidCount: 8,
-      buffer: 0.00008,
+      buffer: 0.00018
     },
 
     // 바퀴+길: 2단계 우선 회피 + 1단계도 일부 회피
@@ -4273,7 +4273,7 @@ const getObstacles = (mode, bfMarkers, start, end) => {
       label: "바퀴+길",
       levels: [2, 1],
       maxAvoidCount: 12,
-      buffer: 0.00008,
+      buffer: 0.00018
     },
   };
 
@@ -4469,7 +4469,7 @@ const makeRouteCacheKey = (start, end, mode) => {
   const eLat = Number(end?.lat).toFixed(5);
   const eLng = Number(end?.lng).toFixed(5);
 
-  return `wheelWorldRouteCache_${mode}_${sLat}_${sLng}_${eLat}_${eLng}`;
+  return `wheelWorldRouteCache_v2_${mode}_${sLat}_${sLng}_${eLat}_${eLng}`;
 };
 
 const saveRouteCache = (start, end, mode, result) => {
@@ -4645,7 +4645,10 @@ const getRoute = async (start, end, mode = "normal", bfMarkers = []) => {
 
   // 예전 코드에서 잘 되던 wheelchair를 먼저 시도하고,
   // 안 되면 foot-walking으로 넘어감.
-  const profiles = ["wheelchair", "foot-walking"];
+  const profiles =
+  mode === "normal"
+    ? ["foot-walking", "wheelchair"]
+    : ["wheelchair", "foot-walking"];
 
   let lastResult = emptyRouteResult("UNKNOWN");
 
@@ -6595,7 +6598,7 @@ return (
                     whiteSpace: "nowrap",
                   }}
                 >
-                  현재 참여 {SURVEY_COUNT}/{SURVEY_LIMIT}
+                  현재 참여 10/10
                 </span>
               )}
 
@@ -7022,7 +7025,7 @@ return (
                     whiteSpace: "nowrap",
                   }}
                 >
-                  현재 참여 {SURVEY_COUNT}/{SURVEY_LIMIT}
+                  현재 참여 10/10
                 </span>
               )}
 
@@ -8061,7 +8064,7 @@ voiceSpeak("음성 안내를 시작합니다. 추천 경로를 따라 이동해 
                   fontWeight: "800",
                 }}
               >
-                현재 참여 {SURVEY_COUNT} / {SURVEY_LIMIT}
+                현재 참여 10/10
               </div>
             </div>
           )}
